@@ -1,4 +1,4 @@
-export type CategoryType = 'trabajo' | 'salud' | 'personal' | 'urgente';
+export type CategoryType = "trabajo" | "salud" | "personal" | "urgente";
 
 export interface Reminder {
   id: string;
@@ -8,6 +8,7 @@ export interface Reminder {
   time: string;
   category: CategoryType;
   completed: boolean;
+  notificationId?: string | null;
 }
 
 export type RootStackParamList = {
