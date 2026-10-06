@@ -31,6 +31,13 @@ export default function RegisterScreen({ navigation }: Props) {
       Alert.alert("Atención", "Todos los campos son obligatorios.");
       return;
     }
+    if (password.length < 6) {
+      Alert.alert(
+        "Atención",
+        "La contraseña debe tener al menos 6 caracteres.",
+      );
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert("Atención", "Las contraseñas no coinciden.");
       return;

@@ -101,7 +101,7 @@ export default function LoginScreen({ navigation }: Props) {
             />
             <TextInput
               style={styles.input}
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Mínimo 6 caracteres"
               placeholderTextColor="#94A3B8"
               value={password}
               onChangeText={setPassword}

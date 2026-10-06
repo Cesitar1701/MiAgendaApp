@@ -202,7 +202,7 @@ export default function HomeScreen({ navigation, route }: Props) {
                 !isFilterActive && styles.filterChipTextActive,
               ]}
             >
-              {isFilterActive ? "Ver todas" : "Ver hoy"}
+              {isFilterActive ? "Ver todo" : "Ver hoy"}
             </Text>
           </TouchableOpacity>
         </View>
