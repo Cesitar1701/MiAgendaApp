@@ -38,3 +38,7 @@ npx expo start
 ```bash
 npm test
 ````
+
+## Link del video
+
+https://drive.google.com/file/d/1EgHf4M5Eu4Z5BwpAjh9GvGz3TfM9AnkE/view?usp=drive_link
