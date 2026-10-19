@@ -1,33 +1,34 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
+  Platform,
+  Modal,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context"; //Libreria moderna de react-navigation para manejar safe area
-import { useFocusEffect } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RouteProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons, Feather } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 
-import { RootStackParamList, Reminder } from "../types";
+import { RootStackParamList } from "../types";
 import ReminderCard from "../components/ReminderCard";
 import { cerrarSesion } from "../services/authStorage";
 import {
-  getStoredReminders,
-  updateReminderStatus,
-  removeReminder,
-} from "../services/reminderStorage";
-import { getFormattedCurrentDate } from "../utils/dateHelpers";
-import { useLocalNotifications } from "../hooks/useLocalNotifications";
-import { Platform } from "react-native";
-import {
-  DateTimePickerAndroid,
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+  toISODateString,
+  formatDisplayDate,
+  getFormattedCurrentDate,
+  isSameDay,
+  resolveReminderIsoDate,
+  isTodayOrFutureReminder,
+} from "../utils/dateHelpers";
+import { useReminders } from "../hooks/useReminders";
+import { COLORS, RADIUS } from "../constants/theme";
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Home">;
@@ -36,56 +37,50 @@ type Props = {
 
 export default function HomeScreen({ navigation, route }: Props) {
   const { username } = route.params || { username: "Usuario" };
-  const [reminders, setReminders] = useState<Reminder[]>([]);
   const insets = useSafeAreaInsets();
-  const { cancelarNotificacion } = useLocalNotifications();
+  const { reminders, toggleComplete, confirmAndDelete } =
+    useReminders(username);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isFilterActive, setIsFilterActive] = useState<boolean>(true);
+  const [showIOSCalendar, setShowIOSCalendar] = useState<boolean>(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-      const loadData = async () => {
-        const stored = await getStoredReminders();
-        if (isActive) {
-          setReminders(stored);
-        }
-      };
-      loadData();
-      return () => {
-        isActive = false;
-      };
-    }, []),
+  const selectedIsoDate = useMemo(
+    () => toISODateString(selectedDate),
+    [selectedDate],
   );
 
-  const formattedFilterDate = useMemo(() => {
-    return selectedDate.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  }, [selectedDate]);
+  const formattedFilterDate = useMemo(
+    () => formatDisplayDate(selectedDate),
+    [selectedDate],
+  );
 
-  const headerDateLabel = useMemo(() => {
-    return selectedDate
-      .toLocaleDateString("es-AR", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      })
-      .toUpperCase();
-  }, [selectedDate]);
+  const headerDateLabel = useMemo(
+    () => getFormattedCurrentDate(selectedDate),
+    [selectedDate],
+  );
+
+  const isSelectedDateToday = useMemo(
+    () => isSameDay(selectedDate, new Date()),
+    [selectedDate],
+  );
 
   const displayedReminders = useMemo(() => {
-    if (!isFilterActive) return reminders;
+    if (!isFilterActive) {
+      const now = new Date();
+      return reminders.filter((r) => isTodayOrFutureReminder(r, now));
+    }
 
     return reminders.filter((r) => {
-      const rDate = r.date.toLowerCase().replace(".", "");
-      const fDate = formattedFilterDate.toLowerCase().replace(".", "");
+      const reminderIso = resolveReminderIsoDate(r);
+      if (reminderIso) {
+        return reminderIso === selectedIsoDate;
+      }
+      const rDate = r.date.toLowerCase().replace(/\./g, "");
+      const fDate = formattedFilterDate.toLowerCase().replace(/\./g, "");
       return rDate === fDate;
     });
-  }, [reminders, isFilterActive, formattedFilterDate]);
+  }, [reminders, isFilterActive, selectedIsoDate, formattedFilterDate]);
 
   const pendingCount = useMemo(
     () => displayedReminders.filter((r) => !r.completed).length,
@@ -100,55 +95,19 @@ export default function HomeScreen({ navigation, route }: Props) {
         onValueChange: (_event, newDate?: Date) => {
           if (newDate) {
             setSelectedDate(newDate);
-            setIsFilterActive(true); // Activa el filtro para el día elegido
+            setIsFilterActive(true);
           }
         },
       });
+    } else {
+      setShowIOSCalendar(true);
     }
-  };
-
-  const handleToggleComplete = async (id: string) => {
-    const target = reminders.find((r) => r.id === id);
-    if (target?.notificationId && !target.completed) {
-      await cancelarNotificacion(target.notificationId);
-    }
-    const updated = await updateReminderStatus(id);
-    setReminders(updated);
-  };
-
-  const handleDelete = (id: string) => {
-    Alert.alert(
-      "Eliminar Recordatorio",
-      "¿Deseas eliminar este recordatorio?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: async () => {
-            const target = reminders.find((r) => r.id === id);
-            if (target?.notificationId) {
-              await cancelarNotificacion(target.notificationId);
-            }
-            const updated = await removeReminder(id);
-            setReminders(updated);
-          },
-        },
-      ],
-    );
   };
 
   const handleLogout = async () => {
     await cerrarSesion();
     navigation.replace("Login");
   };
-
-  // Cálculo memoizado de pendientes y fecha actual
-  /* const pendingCount = useMemo(
-    () => reminders.filter((r) => !r.completed).length,
-    [reminders],
-  ); */
-  const currentDate = useMemo(() => getFormattedCurrentDate(), []);
 
   return (
     <View style={styles.container}>
@@ -163,7 +122,7 @@ export default function HomeScreen({ navigation, route }: Props) {
               activeOpacity={0.8}
               accessibilityLabel="Cerrar sesión"
             >
-              <Feather name="log-out" size={18} color="#FFFFFF" />
+              <Feather name="log-out" size={18} color={COLORS.surface} />
             </TouchableOpacity>
           </View>
 
@@ -173,8 +132,13 @@ export default function HomeScreen({ navigation, route }: Props) {
               style={styles.calendarIconContainer}
               onPress={handleOpenCalendar}
               activeOpacity={0.7}
+              accessibilityLabel="Seleccionar fecha en el calendario"
             >
-              <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
+              <Ionicons
+                name="calendar-outline"
+                size={24}
+                color={COLORS.surface}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -188,7 +152,6 @@ export default function HomeScreen({ navigation, route }: Props) {
             <Text style={styles.counterNumber}>{pendingCount}</Text>
           </View>
 
-          {/* Botón para alternar entre ver el día seleccionado o ver todas las tareas */}
           <TouchableOpacity
             onPress={() => setIsFilterActive(!isFilterActive)}
             style={[
@@ -202,19 +165,29 @@ export default function HomeScreen({ navigation, route }: Props) {
                 !isFilterActive && styles.filterChipTextActive,
               ]}
             >
-              {isFilterActive ? "Ver todo" : "Ver hoy"}
+              {isFilterActive
+                ? "Ver todo"
+                : isSelectedDateToday
+                  ? "Ver hoy"
+                  : "Ver día elegido"}
             </Text>
           </TouchableOpacity>
         </View>
 
         <FlatList
-          data={displayedReminders} // <--- Usa la lista filtrada
+          data={displayedReminders}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <ReminderCard
               reminder={item}
-              onToggleComplete={handleToggleComplete}
-              onDelete={handleDelete}
+              onToggleComplete={toggleComplete}
+              onDelete={confirmAndDelete}
+              onPress={(selectedReminder) =>
+                navigation.navigate("Create", {
+                  username,
+                  reminder: selectedReminder,
+                })
+              }
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -224,7 +197,7 @@ export default function HomeScreen({ navigation, route }: Props) {
               <Text style={styles.emptyText}>
                 {isFilterActive
                   ? "No hay tareas programadas para este día"
-                  : "No tienes tareas registradas"}
+                  : "No tienes tareas próximas registradas"}
               </Text>
               <Text style={styles.emptySubtext}>
                 Toca el botón + para agregar una nueva
@@ -237,12 +210,48 @@ export default function HomeScreen({ navigation, route }: Props) {
       {/* Botón Flotante */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate("Create")}
+        onPress={() => navigation.navigate("Create", { username })}
         activeOpacity={0.85}
         accessibilityLabel="Crear nuevo recordatorio"
       >
-        <Feather name="plus" size={28} color="#FFFFFF" />
+        <Feather name="plus" size={28} color={COLORS.surface} />
       </TouchableOpacity>
+
+      {/* Modal de Calendario para iOS */}
+      {Platform.OS !== "android" && (
+        <Modal
+          visible={showIOSCalendar}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowIOSCalendar(false)}
+        >
+          <TouchableOpacity
+            style={styles.iosModalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowIOSCalendar(false)}
+          >
+            <View style={styles.iosModalCard}>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="inline"
+                onChange={(_event, newDate) => {
+                  if (newDate) {
+                    setSelectedDate(newDate);
+                    setIsFilterActive(true);
+                  }
+                }}
+              />
+              <TouchableOpacity
+                style={styles.iosModalDoneButton}
+                onPress={() => setShowIOSCalendar(false)}
+              >
+                <Text style={styles.iosModalDoneText}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -250,12 +259,12 @@ export default function HomeScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#1E40AF",
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
+    backgroundColor: COLORS.primaryDark,
+    borderBottomLeftRadius: RADIUS.header,
+    borderBottomRightRadius: RADIUS.header,
     paddingHorizontal: 22,
     paddingBottom: 28,
   },
@@ -276,13 +285,13 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.surface,
   },
   logoutButton: {
     width: 38,
     height: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.whiteOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -294,14 +303,14 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.surface,
     letterSpacing: 0.5,
   },
   calendarIconContainer: {
     width: 38,
     height: 38,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.whiteOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -313,18 +322,18 @@ const styles = StyleSheet.create({
   counterRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    /*  alignItems: "center", */
+    alignItems: "center",
     marginBottom: 16,
   },
   counterTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: COLORS.textPrimary,
   },
   counterNumber: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#2563EB",
+    color: COLORS.primary,
   },
   listContent: {
     paddingBottom: 100,
@@ -334,13 +343,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    color: "#475569",
+    color: COLORS.textMuted,
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 4,
   },
   emptySubtext: {
-    color: "#94A3B8",
+    color: COLORS.textPlaceholder,
     fontSize: 14,
   },
   fab: {
@@ -350,33 +359,59 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#2563EB",
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 8,
   },
   filterChip: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: COLORS.primaryBorder,
   },
   filterChipActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#2563EB",
+    color: COLORS.primary,
   },
   filterChipTextActive: {
-    color: "#FFFFFF",
+    color: COLORS.surface,
+  },
+  iosModalOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.overlayDark,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  iosModalCard: {
+    width: "90%",
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    padding: 16,
+    alignItems: "center",
+  },
+  iosModalDoneButton: {
+    marginTop: 12,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: RADIUS.md,
+  },
+  iosModalDoneText: {
+    color: COLORS.surface,
+    fontWeight: "700",
+    fontSize: 14,
   },
 });
