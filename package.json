@@ -13,7 +13,6 @@
     "expo-device": "~57.0.2",
     "expo-notifications": "~57.0.21",
     "expo-status-bar": "~57.0.1",
-    "jest-expo": "~57.0.5",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",

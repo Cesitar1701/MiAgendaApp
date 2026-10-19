@@ -1,23 +1,34 @@
+import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { Reminder } from "../types";
 import { CATEGORIAS } from "../constants/categories";
+import { COLORS, RADIUS } from "../constants/theme";
 
 interface Props {
   reminder: Reminder;
   onToggleComplete: (id: string) => void;
   onDelete: (id: string) => void;
+  onPress?: (reminder: Reminder) => void;
 }
 
 export default function ReminderCard({
   reminder,
   onToggleComplete,
   onDelete,
+  onPress,
 }: Props) {
   const categoryConfig = CATEGORIAS[reminder.category] || CATEGORIAS.personal;
 
   return (
-    <View style={[styles.card, reminder.completed && styles.cardCompleted]}>
+    <TouchableOpacity
+      style={[styles.card, reminder.completed && styles.cardCompleted]}
+      onPress={() => onPress?.(reminder)}
+      activeOpacity={onPress ? 0.85 : 1}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Editar recordatorio ${reminder.title}`}
+    >
       {/* Encabezado: Título, Badge de Categoría y Checkbox */}
       <View style={styles.headerRow}>
         <Text
@@ -45,12 +56,13 @@ export default function ReminderCard({
               reminder.completed && styles.checkboxCompleted,
             ]}
             onPress={() => onToggleComplete(reminder.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             activeOpacity={0.7}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: reminder.completed }}
           >
             {reminder.completed && (
-              <Feather name="check" size={14} color="#FFFFFF" />
+              <Feather name="check" size={14} color={COLORS.surface} />
             )}
           </TouchableOpacity>
         </View>
@@ -74,12 +86,12 @@ export default function ReminderCard({
       {/* Pie: Fecha, Hora y Eliminar */}
       <View style={styles.footerRow}>
         <View style={styles.dateTimeContainer}>
-          <Feather name="calendar" size={13} color="#94A3B8" />
+          <Feather name="calendar" size={13} color={COLORS.textPlaceholder} />
           <Text style={styles.metaText}>{reminder.date}</Text>
 
           <Text style={styles.dotSeparator}>•</Text>
 
-          <Feather name="clock" size={13} color="#94A3B8" />
+          <Feather name="clock" size={13} color={COLORS.textPlaceholder} />
           <Text style={styles.metaText}>{reminder.time}</Text>
         </View>
 
@@ -89,20 +101,20 @@ export default function ReminderCard({
           activeOpacity={0.7}
           accessibilityLabel="Eliminar recordatorio"
         >
-          <Feather name="trash-2" size={18} color="#BDC5D2" />
+          <Feather name="trash-2" size={18} color={COLORS.iconMuted} />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
-    shadowColor: "#64748B",
+    shadowColor: COLORS.textSubtle,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -119,13 +131,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: COLORS.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   titleCompleted: {
     textDecorationLine: "line-through",
-    color: "#64748B",
+    color: COLORS.textSubtle,
   },
   rightActions: {
     flexDirection: "row",
@@ -137,7 +149,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     gap: 4,
   },
   badgeText: {
@@ -149,17 +161,17 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#BDC5D2",
+    borderColor: COLORS.iconMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxCompleted: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
   },
   description: {
     fontSize: 13,
-    color: "#64748B",
+    color: COLORS.textSubtle,
     marginTop: 6,
   },
   textCompleted: {
@@ -167,7 +179,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: COLORS.backgroundAlt,
     marginVertical: 12,
   },
   footerRow: {
@@ -186,7 +198,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: "#64748B",
+    color: COLORS.textSubtle,
     fontWeight: "500",
   },
 });

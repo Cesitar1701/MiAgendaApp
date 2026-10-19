@@ -1,6 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { Alert, Linking, Platform } from "react-native";
-import * as Device from "expo-device";
 import type { EventSubscription } from "expo-modules-core";
 
 import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
@@ -15,6 +14,8 @@ import { setNotificationChannelAsync } from "expo-notifications/build/setNotific
 import { setNotificationHandler } from "expo-notifications/build/NotificationsHandler";
 /* import { SchedulableTriggerInputTypes } from "expo-notifications"; */
 import { SchedulableTriggerInputTypes } from "expo-notifications/build/Notifications.types";
+
+const ANDROID_CHANNEL_ID = "recordatorios";
 
 // Inicializador seguro del handler
 try {
@@ -44,7 +45,7 @@ export function useLocalNotifications() {
 
       if (Platform.OS === "android") {
         try {
-          await setNotificationChannelAsync("recordatorios", {
+          await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
             name: "Recordatorios",
             importance: AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 250, 250],
@@ -134,6 +135,7 @@ export function useLocalNotifications() {
           type: SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: Math.max(segundos, 1),
           repeats: false,
+          channelId: ANDROID_CHANNEL_ID,
         },
       });
       return id;
