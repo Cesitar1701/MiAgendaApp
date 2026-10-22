@@ -12,6 +12,13 @@
           "color": "#E6F4FE"
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MiAgenda necesita acceso a tus fotos para adjuntar imágenes a tus recordatorios.",
+          "cameraPermission": "MiAgenda necesita acceso a la cámara para tomar fotos en tus recordatorios."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "icon": "./assets/icon.png",

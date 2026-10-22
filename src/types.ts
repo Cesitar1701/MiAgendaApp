@@ -13,6 +13,7 @@ export interface Reminder {
   category: CategoryType;
   completed: boolean;
   notificationId?: string | null;
+  imageUri?: string | null;
 }
 
 export type RootStackParamList = {
