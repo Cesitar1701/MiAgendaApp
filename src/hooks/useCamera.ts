@@ -1,62 +1,7 @@
 import { useCallback, useRef } from "react";
-import { Alert, AppState, Linking } from "react-native";
+import { Alert, Linking } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
-/**
- * Ejecuta una solicitud de permisos nativos protegiendo contra el bug de Android
- * donde tocar fuera del diálogo del sistema cancela el popup pero deja la
- * promesa nativa en estado "pending" indefinidamente.
- */
-async function requestPermissionSafely(
-  requestFn: () => Promise<ImagePicker.PermissionResponse>,
-  getFn: () => Promise<ImagePicker.PermissionResponse>,
-): Promise<ImagePicker.PermissionResponse> {
-  return new Promise<ImagePicker.PermissionResponse>((resolve, reject) => {
-    let settled = false;
-    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const cleanup = () => {
-      if (resumeTimer) clearTimeout(resumeTimer);
-      subscription.remove();
-    };
-
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active" && !settled) {
-        // Cuando el diálogo del sistema se cierra (incluso tocando afuera),
-        // la app vuelve a "active". Si tras 500ms la promesa nativa no resolvió,
-        // consultamos el estado actual para destrabar el flujo.
-        resumeTimer = setTimeout(async () => {
-          if (!settled) {
-            settled = true;
-            cleanup();
-            try {
-              const current = await getFn();
-              resolve(current);
-            } catch (err) {
-              reject(err);
-            }
-          }
-        }, 500);
-      }
-    });
-
-    requestFn()
-      .then((res) => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolve(res);
-        }
-      })
-      .catch((err) => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          reject(err);
-        }
-      });
-  });
-}
+import { requestPermissionSafely } from "../utils/permissionHelpers";
 
 export function useCamera() {
   const isBusyRef = useRef(false);

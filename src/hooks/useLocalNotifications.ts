@@ -1,7 +1,9 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Linking, Platform } from "react-native";
-import type { EventSubscription } from "expo-modules-core";
 
+// Nota de Arquitectura: Se importan submódulos específicos de expo-notifications/build/
+// para evitar que Expo Go (SDK 53+) cargue el módulo de Remote Push Notifications
+// que emite advertencias al no usarse en notificaciones locales.
 import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
 import { cancelScheduledNotificationAsync } from "expo-notifications/build/cancelScheduledNotificationAsync";
 import { addNotificationReceivedListener } from "expo-notifications/build/NotificationsEmitter";
@@ -12,24 +14,31 @@ import {
 import { scheduleNotificationAsync } from "expo-notifications/build/scheduleNotificationAsync";
 import { setNotificationChannelAsync } from "expo-notifications/build/setNotificationChannelAsync";
 import { setNotificationHandler } from "expo-notifications/build/NotificationsHandler";
-/* import { SchedulableTriggerInputTypes } from "expo-notifications"; */
 import { SchedulableTriggerInputTypes } from "expo-notifications/build/Notifications.types";
+
+import { requestPermissionSafely } from "../utils/permissionHelpers";
 
 const ANDROID_CHANNEL_ID = "recordatorios";
 
-// Inicializador seguro del handler
+// Inicializador único a nivel de módulo del handler y listener en primer plano
 try {
   setNotificationHandler({
     handleNotification: async () => ({
-      /* shouldShowAlert: true, */
       shouldShowBanner: true,
       shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
     }),
   });
+
+  addNotificationReceivedListener((notification) => {
+    console.log(
+      "Notificación recibida:",
+      notification.request.content.title,
+    );
+  });
 } catch (e) {
-  console.warn("[LocalNotif] Handler no soportado en este entorno:", e);
+  console.warn("[LocalNotif] Handler/Listener no soportado en este entorno:", e);
 }
 
 type PermissionStatus = "idle" | "granted" | "denied" | "loading";
@@ -37,10 +46,12 @@ type PermissionStatus = "idle" | "granted" | "denied" | "loading";
 export function useLocalNotifications() {
   const [permissionStatus, setPermissionStatus] =
     useState<PermissionStatus>("idle");
-  const notificationListener = useRef<EventSubscription | null>(null);
+  const isRequestingRef = useRef(false);
 
   const requestPermission = useCallback(
     async (showAlertOnDenied = false): Promise<boolean> => {
+      if (isRequestingRef.current) return false;
+      isRequestingRef.current = true;
       setPermissionStatus("loading");
 
       if (Platform.OS === "android") {
@@ -53,7 +64,7 @@ export function useLocalNotifications() {
             sound: "default",
           });
         } catch (err) {
-          /*    console.warn("[LocalNotif] Canal Android no disponible:", err); */
+          // Canal Android no disponible en entorno web/emulador sin soporte
         }
       }
 
@@ -63,10 +74,14 @@ export function useLocalNotifications() {
         let canAskAgain = existingPermission.canAskAgain;
 
         if (existingPermission.status !== "granted") {
-          const requested = await requestPermissionsAsync({
-            android: {},
-            ios: { allowAlert: true, allowBadge: true, allowSound: true },
-          });
+          const requested = await requestPermissionSafely(
+            () =>
+              requestPermissionsAsync({
+                android: {},
+                ios: { allowAlert: true, allowBadge: true, allowSound: true },
+              }),
+            () => getPermissionsAsync(),
+          );
           finalStatus = requested.status;
           canAskAgain = requested.canAskAgain;
         }
@@ -74,12 +89,10 @@ export function useLocalNotifications() {
         const granted = finalStatus === "granted";
         setPermissionStatus(granted ? "granted" : "denied");
 
-        if (!granted && showAlertOnDenied) {
+        if (!granted && showAlertOnDenied && !canAskAgain) {
           Alert.alert(
-            "Permisos desactivados",
-            canAskAgain
-              ? "Habilita los permisos para recibir recordatorios."
-              : "Debes habilitar las notificaciones desde Ajustes.",
+            "Permisos de notificación desactivados",
+            "Debes habilitar las notificaciones desde los Ajustes del dispositivo para recibir recordatorios.",
             [
               { text: "Cancelar", style: "cancel" },
               { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
@@ -92,71 +105,78 @@ export function useLocalNotifications() {
         console.warn("[LocalNotif] Error verificando permisos:", error);
         setPermissionStatus("denied");
         return false;
+      } finally {
+        isRequestingRef.current = false;
       }
     },
     [],
   );
 
-  useEffect(() => {
-    try {
-      notificationListener.current = addNotificationReceivedListener(
-        (notification) => {
-          console.log(
-            "Notificación recibida:",
-            notification.request.content.title,
-          );
-        },
+  const programarNotificacion = useCallback(
+    async (
+      titulo: string,
+      descripcion: string,
+      segundos: number = 5,
+    ): Promise<string | null> => {
+      const hasPermission = await requestPermission(true);
+      if (!hasPermission) return null;
+
+      try {
+        const id = await scheduleNotificationAsync({
+          content: {
+            title: `⏰ ${titulo}`,
+            body: descripcion || "Tienes una tarea programada.",
+            sound: "default",
+          },
+          trigger: {
+            type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: Math.max(segundos, 1),
+            repeats: false,
+            channelId: ANDROID_CHANNEL_ID,
+          },
+        });
+        return id;
+      } catch (error) {
+        console.error(
+          "[LocalNotif] Error al programar la notificación:",
+          error,
+        );
+        return null;
+      }
+    },
+    [requestPermission],
+  );
+
+  const cancelarNotificacion = useCallback(
+    async (notificationId?: string | null) => {
+      if (!notificationId) return;
+      try {
+        await cancelScheduledNotificationAsync(notificationId);
+      } catch (err) {
+        console.warn("[LocalNotif] Error al cancelar:", err);
+      }
+    },
+    [],
+  );
+
+  const cancelarMultiplesNotificaciones = useCallback(
+    async (notificationIds: (string | null | undefined)[]) => {
+      const validIds = notificationIds.filter((id): id is string =>
+        Boolean(id),
       );
-    } catch (e) {
-      console.warn("[LocalNotif] Listener no disponible en este entorno.");
-    }
-
-    return () => {
-      notificationListener.current?.remove();
-    };
-  }, []);
-
-  const programarNotificacion = async (
-    titulo: string,
-    descripcion: string,
-    segundos: number = 5,
-  ): Promise<string | null> => {
-    const hasPermission = await requestPermission(true);
-    if (!hasPermission) return null;
-
-    try {
-      const id = await scheduleNotificationAsync({
-        content: {
-          title: `⏰ ${titulo}`,
-          body: descripcion || "Tienes una tarea programada.",
-          sound: "default",
-        },
-        trigger: {
-          type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: Math.max(segundos, 1),
-          repeats: false,
-          channelId: ANDROID_CHANNEL_ID,
-        },
-      });
-      return id;
-    } catch (error) {
-      console.error("[LocalNotif] Error al programar la notificacion:", error);
-      return null;
-    }
-  };
-
-  const cancelarNotificacion = async (notificationId?: string | null) => {
-    if (!notificationId) return;
-    try {
-      await cancelScheduledNotificationAsync(notificationId);
-    } catch (err) {
-      console.warn("[LocalNotif] Error al cancelar:", err);
-    }
-  };
+      await Promise.all(
+        validIds.map((id) =>
+          cancelScheduledNotificationAsync(id).catch(() => undefined),
+        ),
+      );
+    },
+    [],
+  );
 
   return {
     permissionStatus,
     programarNotificacion,
     cancelarNotificacion,
+    cancelarMultiplesNotificaciones,
   };
 }

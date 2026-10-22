@@ -38,8 +38,12 @@ type Props = {
 export default function HomeScreen({ navigation, route }: Props) {
   const { username } = route.params || { username: "Usuario" };
   const insets = useSafeAreaInsets();
-  const { reminders, toggleComplete, confirmAndDelete } =
-    useReminders(username);
+  const {
+    reminders,
+    toggleComplete,
+    confirmAndDelete,
+    cancelUserNotifications,
+  } = useReminders(username);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isFilterActive, setIsFilterActive] = useState<boolean>(true);
@@ -105,6 +109,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   };
 
   const handleLogout = async () => {
+    await cancelUserNotifications();
     await cerrarSesion();
     navigation.replace("Login");
   };

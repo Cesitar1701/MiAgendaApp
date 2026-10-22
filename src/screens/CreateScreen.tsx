@@ -75,19 +75,22 @@ export default function CreateScreen({ navigation, route }: Props) {
   const [withNotification, setWithNotification] = useState<boolean>(() =>
     Boolean(
       editingReminder &&
-        (editingReminder.notificationId ||
-          (editingReminder.leadTimeSeconds !== undefined &&
-            editingReminder.leadTimeSeconds !== null)),
+      (editingReminder.notificationId ||
+        (editingReminder.leadTimeSeconds !== undefined &&
+          editingReminder.leadTimeSeconds !== null)),
     ),
   );
-  const [leadTimeSeconds, setLeadTimeSeconds] = useState<number>(
-    () => editingReminder?.leadTimeSeconds ?? -10,
+  const [leadTimeSeconds, setLeadTimeSeconds] = useState<number>(() =>
+    editingReminder?.leadTimeSeconds !== undefined &&
+    editingReminder?.leadTimeSeconds !== null
+      ? Math.max(0, editingReminder.leadTimeSeconds)
+      : 0,
   );
   const [notificationLabel, setNotificationLabel] = useState<string>(() =>
     editingReminder?.leadTimeSeconds !== undefined &&
     editingReminder?.leadTimeSeconds !== null
       ? formatLeadTimeLabel(editingReminder.leadTimeSeconds)
-      : "Modo Prueba (10 seg)",
+      : "A la hora del evento",
   );
 
   const [showPresetModal, setShowPresetModal] = useState<boolean>(false);
@@ -184,23 +187,17 @@ export default function CreateScreen({ navigation, route }: Props) {
 
     let notifId: string | null = null;
     if (withNotification) {
-      let secondsRemaining = 0;
+      const secondsRemaining = calcularSegundosRestantes(
+        selectedDate.getTime(),
+        leadTimeSeconds,
+      );
 
-      if (leadTimeSeconds === -10) {
-        secondsRemaining = 10;
-      } else {
-        secondsRemaining = calcularSegundosRestantes(
-          selectedDate.getTime(),
-          leadTimeSeconds,
+      if (secondsRemaining <= 0) {
+        Alert.alert(
+          "Hora no válida",
+          "La hora programada para la notificación ya ha pasado. Por favor selecciona una fecha posterior.",
         );
-
-        if (secondsRemaining <= 0) {
-          Alert.alert(
-            "Hora no válida",
-            "La hora programada para la notificación ya ha pasado. Por favor selecciona una fecha posterior.",
-          );
-          return;
-        }
+        return;
       }
 
       if (editingReminder?.notificationId) {

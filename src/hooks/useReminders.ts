@@ -12,8 +12,11 @@ import { useLocalNotifications } from "./useLocalNotifications";
 
 export function useReminders(username: string) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const { programarNotificacion, cancelarNotificacion } =
-    useLocalNotifications();
+  const {
+    programarNotificacion,
+    cancelarNotificacion,
+    cancelarMultiplesNotificaciones,
+  } = useLocalNotifications();
 
   useFocusEffect(
     useCallback(() => {
@@ -48,13 +51,10 @@ export function useReminders(username: string) {
         target.leadTimeSeconds !== null &&
         target.targetTimestamp
       ) {
-        const secondsRemaining =
-          target.leadTimeSeconds === -10
-            ? 10
-            : calcularSegundosRestantes(
-                target.targetTimestamp,
-                target.leadTimeSeconds,
-              );
+        const secondsRemaining = calcularSegundosRestantes(
+          target.targetTimestamp,
+          Math.max(0, target.leadTimeSeconds),
+        );
         if (secondsRemaining > 0) {
           nextNotificationId = await programarNotificacion(
             target.title,
@@ -99,9 +99,19 @@ export function useReminders(username: string) {
     [reminders, username, cancelarNotificacion],
   );
 
+  const cancelUserNotifications = useCallback(async () => {
+    const activeIds = reminders
+      .filter((r) => !r.completed && r.notificationId)
+      .map((r) => r.notificationId);
+    if (activeIds.length > 0) {
+      await cancelarMultiplesNotificaciones(activeIds);
+    }
+  }, [reminders, cancelarMultiplesNotificaciones]);
+
   return {
     reminders,
     toggleComplete,
     confirmAndDelete,
+    cancelUserNotifications,
   };
 }
