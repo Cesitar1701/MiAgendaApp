@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   Modal,
+  Image,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
@@ -21,6 +22,7 @@ import DateTimePicker, {
 import { RootStackParamList, CategoryType, Reminder } from "../types";
 import { saveReminder, updateReminder } from "../services/reminderStorage";
 import { useLocalNotifications } from "../hooks/useLocalNotifications";
+import { useCamera } from "../hooks/useCamera";
 import {
   toISODateString,
   formatDisplayDate,
@@ -46,6 +48,7 @@ export default function CreateScreen({ navigation, route }: Props) {
 
   const { programarNotificacion, cancelarNotificacion } =
     useLocalNotifications();
+  const { tomarFoto, elegirDeGaleria } = useCamera();
 
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(
     () => editingReminder?.category ?? null,
@@ -55,6 +58,9 @@ export default function CreateScreen({ navigation, route }: Props) {
   );
   const [description, setDescription] = useState<string>(
     () => editingReminder?.description ?? "",
+  );
+  const [imageUri, setImageUri] = useState<string | null>(
+    () => editingReminder?.imageUri ?? null,
   );
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -130,6 +136,20 @@ export default function CreateScreen({ navigation, route }: Props) {
       }
     } else {
       setIosPickerMode(mode);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const uri = await tomarFoto();
+    if (uri) {
+      setImageUri(uri);
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    const uri = await elegirDeGaleria();
+    if (uri) {
+      setImageUri(uri);
     }
   };
 
@@ -215,6 +235,7 @@ export default function CreateScreen({ navigation, route }: Props) {
       leadTimeSeconds: withNotification ? leadTimeSeconds : null,
       completed: editingReminder ? editingReminder.completed : false,
       notificationId: notifId,
+      imageUri: imageUri ?? null,
     };
 
     const saved = isEditing
@@ -335,6 +356,61 @@ export default function CreateScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Botones de Cámara y Galería / Vista Previa */}
+            {imageUri ? (
+              <View style={styles.photoAttachedBox}>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.photoThumbnail}
+                />
+                <View style={styles.photoInfo}>
+                  <Text style={styles.photoAttachedTitle}>Foto adjunta</Text>
+                  <View style={styles.photoReplaceActions}>
+                    <TouchableOpacity
+                      onPress={handleTakePhoto}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.retakePhotoText}>Cámara</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.photoActionsDot}>•</Text>
+                    <TouchableOpacity
+                      onPress={handlePickFromGallery}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.retakePhotoText}>Galería</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setImageUri(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Quitar foto adjunta"
+                >
+                  <Feather name="trash-2" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.rowTwoCols}>
+                <TouchableOpacity
+                  style={[styles.col, styles.cameraButton]}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="camera" size={16} color={COLORS.textMuted} />
+                  <Text style={styles.cameraButtonText}>Tomar foto</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.col, styles.cameraButton]}
+                  onPress={handlePickFromGallery}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="image" size={16} color={COLORS.textMuted} />
+                  <Text style={styles.cameraButtonText}>Galería</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
@@ -510,6 +586,63 @@ const styles = StyleSheet.create({
   pickerTriggerText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  cameraButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    backgroundColor: COLORS.background,
+  },
+  cameraButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+  },
+  photoAttachedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryAccentBorder,
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
+    gap: 12,
+  },
+  photoThumbnail: {
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: COLORS.backgroundAlt,
+  },
+  photoInfo: {
+    flex: 1,
+  },
+  photoAttachedTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+  photoReplaceActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  photoActionsDot: {
+    fontSize: 12,
+    color: COLORS.textPlaceholder,
+  },
+  retakePhotoText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
   notificationToggle: {
     flexDirection: "row",
