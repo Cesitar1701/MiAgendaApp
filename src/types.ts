@@ -1,5 +1,17 @@
 export type CategoryType = "trabajo" | "salud" | "personal" | "urgente";
 
+export interface ReminderLocation {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
+
+export interface ReminderContact {
+  name: string;
+  phone?: string;
+  email?: string;
+}
+
 export interface Reminder {
   id: string;
   username?: string;
@@ -14,6 +26,9 @@ export interface Reminder {
   completed: boolean;
   notificationId?: string | null;
   imageUri?: string | null;
+  location?: ReminderLocation;
+  contact?: ReminderContact;
+  calendarEventId?: string;
 }
 
 export type RootStackParamList = {
