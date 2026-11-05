@@ -1,41 +1,29 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# Directivas del Proyecto: MiAgendaApp
 
-## Expo has changed — do not trust your training data
+## Stack Tecnológico y Entorno
+- Plataforma: Expo SDK 57 (~57.0.26) en modo gestionado.
+- Núcleo: React Native 0.86.3, React 19.2.3, TypeScript en modo estricto.
+- Navegación: React Navigation v7.
+- Persistencia y Sesión: @react-native-async-storage/async-storage.
+- Estado Global Obligatorio: Zustand (reemplazando useState/prop drilling en lista principal y sesión).
+- Hardware y Recursos del Dispositivo:
+  - Cámara y Galería: expo-image-picker.
+  - Notificaciones: expo-notifications.
+  - Selectores: @react-native-community/datetimepicker.
+  - Ubicación (GPS): expo-location (coordenadas o dirección asociada al recordatorio).
+  - Contactos: expo-contacts (seleccionar contacto vinculado al recordatorio).
+  - Calendario Nativo: expo-calendar (sincronizar evento en el calendario del teléfono).
+- Testing: Jest, jest-expo, @testing-library/react-native.
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
-
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
-
-## Commands
-
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
-
-```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
-```
-
-Run lint and typecheck before declaring any task done.
-
-## Navigation & Routing
-
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
-
-## Building with EAS
-
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
-
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+## Arquitectura y Estándares
+1. **Estado Global con Zustand:**
+   - Crear los stores en `src/store/` (ej: `useReminderStore.ts`, `useAuthStore.ts`).
+   - El store debe manejar las acciones de agregar, editar, eliminar y cargar recordatorios.
+   - Las pantallas deben consumir selectores y hooks del store, eliminando el prop drilling.
+2. **Manejo Obligatorio de Permisos:**
+   - Utilizar siempre `requestPermissionSafely` (`src/utils/permissionHelpers.ts`) antes de invocar cámara, galería, ubicación, contactos o calendario.
+   - Gestionar explícitamente los 3 estados: concedido, denegado y pendiente, mostrando alertas claras si es rechazado.
+3. **Entidad Recordatorio (Reminder):**
+   - Actualizar `src/types.ts` para soportar: foto adjunta (`imageUri`), ubicación (`location`), contacto asociado (`contact`) y sincronización con calendario (`calendarEventId`).
+4. **Testing Automatizado:**
+   - Mantener las suites existentes y asegurar que las nuevas acciones del store o helpers pasen los tests con Jest.
