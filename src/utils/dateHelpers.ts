@@ -112,7 +112,7 @@ export const isTodayOrFutureReminder = (
 export type TimeUnit = "minutes" | "hours" | "days" | "weeks";
 
 export const NOTIFICATION_PRESETS = [
-  { label: "A los 10 segundos", seconds: -10 },
+  { label: "A la hora del evento", seconds: 0 },
   { label: "5 minutos antes", seconds: 5 * 60 },
   { label: "15 minutos antes", seconds: 15 * 60 },
   { label: "30 minutos antes", seconds: 30 * 60 },
@@ -150,6 +150,8 @@ export const calculateCustomLeadTime = (
 };
 
 export const formatLeadTimeLabel = (seconds: number): string => {
+  if (seconds <= 0) return "A la hora del evento";
+
   const preset = NOTIFICATION_PRESETS.find((p) => p.seconds === seconds);
   if (preset) return preset.label;
 

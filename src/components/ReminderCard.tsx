@@ -88,7 +88,7 @@ export default function ReminderCard({
 
         <View style={styles.divider} />
 
-        {/* Pie: Fecha, Hora, Botón Ver Foto y Eliminar */}
+        {/* Pie: Fecha, Hora, Alarma, Botón Ver Foto y Eliminar */}
         <View style={styles.footerRow}>
           <View style={styles.dateTimeContainer}>
             <Feather name="calendar" size={13} color={COLORS.textPlaceholder} />
@@ -98,6 +98,21 @@ export default function ReminderCard({
 
             <Feather name="clock" size={13} color={COLORS.textPlaceholder} />
             <Text style={styles.metaText}>{reminder.time}</Text>
+
+            {(reminder.notificationId ||
+              (reminder.leadTimeSeconds !== undefined &&
+                reminder.leadTimeSeconds !== null)) &&
+            !reminder.completed ? (
+              <>
+                <Text style={styles.dotSeparator}>•</Text>
+                <Feather
+                  name="bell"
+                  size={12}
+                  color={COLORS.primary}
+                  accessibilityLabel="Tiene alarma programada"
+                />
+              </>
+            ) : null}
           </View>
 
           <View style={styles.footerActions}>
