@@ -15,12 +15,14 @@ export function useLocation() {
             let canAskAgain = existing.canAskAgain;
 
             if (existing.status !== Location.PermissionStatus.GRANTED) {
-                const requested = await requestPermissionSafely(
-                    () => Location.requestForegroundPermissionsAsync(),
-                    () => Location.getForegroundPermissionsAsync(),
-                );
-                finalStatus = requested.status;
-                canAskAgain = requested.canAskAgain;
+                if (existing.canAskAgain !== false) {
+                    const requested = await requestPermissionSafely(
+                        () => Location.requestForegroundPermissionsAsync(),
+                        () => Location.getForegroundPermissionsAsync(),
+                    );
+                    finalStatus = requested.status;
+                    canAskAgain = requested.canAskAgain;
+                }
             }
 
             if (finalStatus !== Location.PermissionStatus.GRANTED) {
@@ -45,19 +47,47 @@ export function useLocation() {
             return true;
         } catch (error) {
             console.warn("[useLocation] Error al solicitar permisos:", error);
-            Alert.alert("Error", "Ocurrió un error al verificar los permisos de ubicación.");
+            Alert.alert(
+                "Error",
+                "Ocurrió un error al verificar los permisos de ubicación.",
+            );
             return false;
         }
     }, []);
 
     const formatearDireccion = (geo: Location.LocationGeocodedAddress): string => {
-        const calle = geo.street ? `${geo.street}${geo.streetNumber ? " " + geo.streetNumber : ""}` : "";
+        const calle = geo.street
+            ? `${geo.street}${geo.streetNumber ? " " + geo.streetNumber : ""}`
+            : "";
         const zona = geo.district || geo.subregion || geo.city || "";
         const region = geo.region || geo.country || "";
 
         const partes = [calle, zona, region].filter((p) => Boolean(p && p.trim()));
         return partes.length > 0 ? partes.join(", ") : "Ubicación detectada";
     };
+
+    const obtenerDireccionDeCoordenadas = useCallback(
+        async (coords: { latitude: number; longitude: number }): Promise<string> => {
+            try {
+                const geocoded = await Location.reverseGeocodeAsync({
+                    latitude: coords.latitude,
+                    longitude: coords.longitude,
+                });
+
+                if (geocoded && geocoded.length > 0) {
+                    return formatearDireccion(geocoded[0]);
+                }
+                return `Lat: ${coords.latitude.toFixed(4)}, Lon: ${coords.longitude.toFixed(4)}`;
+            } catch (geocodeError) {
+                console.warn(
+                    "[useLocation] No se pudo obtener la dirección exacta:",
+                    geocodeError,
+                );
+                return `Lat: ${coords.latitude.toFixed(4)}, Lon: ${coords.longitude.toFixed(4)}`;
+            }
+        },
+        [],
+    );
 
     const obtenerUbicacionActual = useCallback(async (): Promise<ReminderLocation | null> => {
         if (isBusyRef.current) return null;
@@ -67,27 +97,34 @@ export function useLocation() {
         try {
             const hasPermission = await solicitarPermisoUbicacion();
             if (!hasPermission) return null;
-
-            const position = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            });
-
-            const { latitude, longitude } = position.coords;
-            let address = "Ubicación seleccionada";
-
+            // 1. Intentar obtener la última ubicación conocida que usan las demas apps y esta guardada en cache del telefono.(Responde en < 50ms)
+            let coords: { latitude: number; longitude: number } | null = null;
             try {
-                const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
-                if (geocoded && geocoded.length > 0) {
-                    address = formatearDireccion(geocoded[0]);
+                const lastKnown = await Location.getLastKnownPositionAsync();
+                if (lastKnown?.coords) {
+                    coords = {
+                        latitude: lastKnown.coords.latitude,
+                        longitude: lastKnown.coords.longitude,
+                    };
                 }
-            } catch (geocodeError) {
-                console.warn("[useLocation] No se pudo obtener la dirección exacta:", geocodeError);
-                address = `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`;
+            } catch {
+                // Fallback silencioso si no hay caché
             }
-
+            // 2. Si no había en caché, consultar al sensor con precisión balanceada
+            if (!coords) {
+                const position = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+                coords = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                };
+            }
+            // 3. Obtener la dirección
+            const address = await obtenerDireccionDeCoordenadas(coords);
             return {
-                latitude,
-                longitude,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
                 address,
             };
         } catch (error) {
@@ -101,11 +138,12 @@ export function useLocation() {
             setLoading(false);
             isBusyRef.current = false;
         }
-    }, [solicitarPermisoUbicacion]);
+    }, [solicitarPermisoUbicacion, obtenerDireccionDeCoordenadas]);
 
     return {
         loading,
         solicitarPermisoUbicacion,
         obtenerUbicacionActual,
+        obtenerDireccionDeCoordenadas,
     };
 }

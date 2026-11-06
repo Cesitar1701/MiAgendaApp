@@ -19,7 +19,7 @@ import DateTimePicker, {
   DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
 
-import { RootStackParamList, CategoryType, Reminder } from "../types";
+import { RootStackParamList, CategoryType, Reminder, ReminderLocation } from "../types";
 import { useReminderStore } from "../store/useReminderStore";
 import { useLocalNotifications } from "../hooks/useLocalNotifications";
 import { useCamera } from "../hooks/useCamera";
@@ -33,6 +33,7 @@ import {
 } from "../utils/dateHelpers";
 import CategorySelector from "../components/CategorySelector";
 import NotificationModals from "../components/NotificationModals";
+import MapLocationPickerModal from "../components/MapLocationPickerModal";
 import CustomButton from "../components/CustomButton";
 import { COLORS, RADIUS } from "../constants/theme";
 
@@ -65,6 +66,10 @@ export default function CreateScreen({ navigation, route }: Props) {
   const [imageUri, setImageUri] = useState<string | null>(
     () => editingReminder?.imageUri ?? null,
   );
+  const [location, setLocation] = useState<ReminderLocation | null>(
+    () => editingReminder?.location ?? null,
+  );
+  const [showMapModal, setShowMapModal] = useState<boolean>(false);
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (editingReminder) {
@@ -85,13 +90,13 @@ export default function CreateScreen({ navigation, route }: Props) {
   );
   const [leadTimeSeconds, setLeadTimeSeconds] = useState<number>(() =>
     editingReminder?.leadTimeSeconds !== undefined &&
-    editingReminder?.leadTimeSeconds !== null
+      editingReminder?.leadTimeSeconds !== null
       ? Math.max(0, editingReminder.leadTimeSeconds)
       : 0,
   );
   const [notificationLabel, setNotificationLabel] = useState<string>(() =>
     editingReminder?.leadTimeSeconds !== undefined &&
-    editingReminder?.leadTimeSeconds !== null
+      editingReminder?.leadTimeSeconds !== null
       ? formatLeadTimeLabel(editingReminder.leadTimeSeconds)
       : "A la hora del evento",
   );
@@ -236,6 +241,7 @@ export default function CreateScreen({ navigation, route }: Props) {
       completed: editingReminder ? editingReminder.completed : false,
       notificationId: notifId,
       imageUri: imageUri ?? null,
+      location: location ?? undefined,
     };
 
     const saved = isEditing
@@ -412,6 +418,49 @@ export default function CreateScreen({ navigation, route }: Props) {
               </View>
             )}
 
+            {/* Ubicación asignada / Botón Agregar Ubicación */}
+            {location ? (
+              <View style={styles.locationAttachedBox}>
+                <View style={styles.locationIconBox}>
+                  <Feather name="map-pin" size={18} color={COLORS.primary} />
+                </View>
+                <View style={styles.locationInfo}>
+                  <Text style={styles.locationAttachedTitle}>
+                    Ubicación asignada
+                  </Text>
+                  <Text style={styles.locationAddressText} numberOfLines={2}>
+                    {location.address ||
+                      `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowMapModal(true)}
+                    activeOpacity={0.7}
+                    style={styles.changeLocationButton}
+                  >
+                    <Text style={styles.changeLocationText}>
+                      Cambiar en mapa
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setLocation(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Quitar ubicación adjunta"
+                >
+                  <Feather name="trash-2" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.locationButton}
+                onPress={() => setShowMapModal(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="map-pin" size={16} color={COLORS.textMuted} />
+                <Text style={styles.locationButtonText}>Agregar ubicación</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[
                 styles.notificationToggle,
@@ -450,6 +499,13 @@ export default function CreateScreen({ navigation, route }: Props) {
         showPresetModal={showPresetModal}
         onClosePresetModal={() => setShowPresetModal(false)}
         onSelectLeadTime={handleSelectLeadTime}
+      />
+
+      <MapLocationPickerModal
+        visible={showMapModal}
+        initialLocation={location}
+        onClose={() => setShowMapModal(false)}
+        onConfirm={(loc) => setLocation(loc)}
       />
 
       {/* Selector de Fecha/Hora para iOS */}
@@ -640,6 +696,64 @@ const styles = StyleSheet.create({
     color: COLORS.textPlaceholder,
   },
   retakePhotoText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.primary,
+  },
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    backgroundColor: COLORS.background,
+  },
+  locationButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+  },
+  locationAttachedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryAccentBorder,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  locationIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationAttachedTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+  locationAddressText: {
+    fontSize: 13,
+    color: COLORS.textBody,
+    marginTop: 2,
+  },
+  changeLocationButton: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  changeLocationText: {
     fontSize: 12,
     fontWeight: "600",
     color: COLORS.primary,

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
-import { Reminder } from "../types";
+import { Reminder, ReminderLocation } from "../types";
 import { CATEGORIAS } from "../constants/categories";
 import { COLORS, RADIUS } from "../constants/theme";
 import ImagePreviewModal from "./ImagePreviewModal";
@@ -21,6 +21,34 @@ export default function ReminderCard({
 }: Props) {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const categoryConfig = CATEGORIAS[reminder.category] || CATEGORIAS.personal;
+
+  const handleOpenMap = (location: ReminderLocation, title: string) => {
+    const lat = location.latitude;
+    const lon = location.longitude;
+    const label = encodeURIComponent(location.address || title);
+
+    const url = Platform.select({
+      ios: `maps:0,0?q=${label}@${lat},${lon}`,
+      android: `geo:0,0?q=${lat},${lon}(${label})`,
+      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    });
+
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          Linking.openURL(
+            `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+          );
+        }
+      })
+      .catch(() => {
+        Linking.openURL(
+          `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+        );
+      });
+  };
 
   return (
     <>
@@ -86,6 +114,26 @@ export default function ReminderCard({
           </Text>
         ) : null}
 
+        {/* Chip de Ubicación */}
+        {reminder.location ? (
+          <TouchableOpacity
+            style={styles.locationChip}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              handleOpenMap(reminder.location!, reminder.title);
+            }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Abrir ubicación ${reminder.location.address || "en el mapa"}`}
+          >
+            <Feather name="map-pin" size={12} color={COLORS.primary} />
+            <Text style={styles.locationChipText} numberOfLines={1}>
+              {reminder.location.address ||
+                `${reminder.location.latitude.toFixed(4)}, ${reminder.location.longitude.toFixed(4)}`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         <View style={styles.divider} />
 
         {/* Pie: Fecha, Hora, Alarma, Botón Ver Foto y Eliminar */}
@@ -102,7 +150,7 @@ export default function ReminderCard({
             {(reminder.notificationId ||
               (reminder.leadTimeSeconds !== undefined &&
                 reminder.leadTimeSeconds !== null)) &&
-            !reminder.completed ? (
+              !reminder.completed ? (
               <>
                 <Text style={styles.dotSeparator}>•</Text>
                 <Feather
@@ -223,6 +271,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.backgroundAlt,
     marginVertical: 12,
+  },
+  locationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    gap: 6,
+    maxWidth: "100%",
+  },
+  locationChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: COLORS.primaryDark,
+    flexShrink: 1,
   },
   footerRow: {
     flexDirection: "row",
