@@ -19,7 +19,8 @@
           "cameraPermission": "MiAgenda necesita acceso a la cámara para tomar fotos en tus recordatorios."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-status-bar"
     ],
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

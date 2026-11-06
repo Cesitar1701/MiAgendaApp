@@ -20,7 +20,7 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 
 import { RootStackParamList, CategoryType, Reminder } from "../types";
-import { saveReminder, updateReminder } from "../services/reminderStorage";
+import { useReminderStore } from "../store/useReminderStore";
 import { useLocalNotifications } from "../hooks/useLocalNotifications";
 import { useCamera } from "../hooks/useCamera";
 import {
@@ -45,6 +45,9 @@ export default function CreateScreen({ navigation, route }: Props) {
   const username = route?.params?.username;
   const editingReminder = route?.params?.reminder;
   const isEditing = Boolean(editingReminder);
+
+  const addReminder = useReminderStore((state) => state.addReminder);
+  const updateReminder = useReminderStore((state) => state.updateReminder);
 
   const { programarNotificacion, cancelarNotificacion } =
     useLocalNotifications();
@@ -237,7 +240,7 @@ export default function CreateScreen({ navigation, route }: Props) {
 
     const saved = isEditing
       ? await updateReminder(reminderPayload, username)
-      : await saveReminder(reminderPayload, username);
+      : await addReminder(reminderPayload, username);
 
     if (saved) {
       navigation.goBack();

@@ -1,17 +1,17 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Reminder } from "../types";
-import {
-  getStoredReminders,
-  updateReminderStatus,
-  removeReminder,
-} from "../services/reminderStorage";
+import { useReminderStore } from "../store/useReminderStore";
 import { calcularSegundosRestantes } from "../utils/dateHelpers";
 import { useLocalNotifications } from "./useLocalNotifications";
 
 export function useReminders(username: string) {
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const reminders = useReminderStore((state) => state.reminders);
+  const loadReminders = useReminderStore((state) => state.loadReminders);
+  const updateReminder = useReminderStore((state) => state.updateReminder);
+  const deleteReminder = useReminderStore((state) => state.deleteReminder);
+
   const {
     programarNotificacion,
     cancelarNotificacion,
@@ -20,18 +20,8 @@ export function useReminders(username: string) {
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-      const loadData = async () => {
-        const stored = await getStoredReminders(username);
-        if (isActive) {
-          setReminders(stored);
-        }
-      };
-      loadData();
-      return () => {
-        isActive = false;
-      };
-    }, [username]),
+      loadReminders(username);
+    }, [username, loadReminders]),
   );
 
   const toggleComplete = useCallback(
@@ -64,14 +54,27 @@ export function useReminders(username: string) {
         }
       }
 
-      const updated = await updateReminderStatus(
-        id,
-        username,
-        nextNotificationId,
-      );
-      setReminders(updated);
+      const nextCompleted = !target.completed;
+      const updatedReminder: Reminder = {
+        ...target,
+        completed: nextCompleted,
+        notificationId:
+          nextNotificationId !== undefined
+            ? nextNotificationId
+            : nextCompleted
+              ? null
+              : target.notificationId,
+      };
+
+      await updateReminder(updatedReminder, username);
     },
-    [reminders, username, cancelarNotificacion, programarNotificacion],
+    [
+      reminders,
+      username,
+      cancelarNotificacion,
+      programarNotificacion,
+      updateReminder,
+    ],
   );
 
   const confirmAndDelete = useCallback(
@@ -89,14 +92,13 @@ export function useReminders(username: string) {
               if (target?.notificationId) {
                 await cancelarNotificacion(target.notificationId);
               }
-              const updated = await removeReminder(id, username);
-              setReminders(updated);
+              await deleteReminder(id, username);
             },
           },
         ],
       );
     },
-    [reminders, username, cancelarNotificacion],
+    [reminders, username, cancelarNotificacion, deleteReminder],
   );
 
   const cancelUserNotifications = useCallback(async () => {

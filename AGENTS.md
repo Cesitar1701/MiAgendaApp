@@ -1,8 +1,8 @@
 # Directivas del Proyecto: MiAgendaApp
 
 ## Stack Tecnológico y Entorno
-- Plataforma: Expo SDK 57 (~57.0.26) en modo gestionado.
-- Núcleo: React Native 0.86.3, React 19.2.3, TypeScript en modo estricto.
+- Plataforma: Expo SDK 58 (^58.0.0) en modo gestionado.
+- Núcleo: React Native 0.88.1, React 19.3.0, TypeScript en modo estricto.
 - Navegación: React Navigation v7.
 - Persistencia y Sesión: @react-native-async-storage/async-storage.
 - Estado Global Obligatorio: Zustand (reemplazando useState/prop drilling en lista principal y sesión).
