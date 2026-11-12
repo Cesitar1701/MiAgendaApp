@@ -89,5 +89,64 @@ describe("Componente: ReminderCard", () => {
 
     expect(screen.queryByLabelText(/Abrir ubicación/i)).toBeNull();
   });
+
+  test("renderiza chip de contacto con nombre y teléfono cuando reminder.contact está presente", () => {
+    const reminderWithContact: Reminder = {
+      ...baseReminder,
+      contact: {
+        name: "María López",
+        phone: "+54 11 4433-2211",
+      },
+    };
+
+    render(
+      <ReminderCard
+        reminder={reminderWithContact}
+        onToggleComplete={jest.fn()}
+        onDelete={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("María López • +54 11 4433-2211")).toBeTruthy();
+    expect(screen.getByTestId("icon-user")).toBeTruthy();
+  });
+
+  test("al presionar el chip de contacto con teléfono intenta abrir la URL tel: mediante Linking", async () => {
+    const openURLSpy = jest.spyOn(Linking, "openURL").mockResolvedValue(true as never);
+    jest.spyOn(Linking, "canOpenURL").mockResolvedValue(true as never);
+
+    const reminderWithContact: Reminder = {
+      ...baseReminder,
+      contact: {
+        name: "Carlos Ruiz",
+        phone: "+54 9 11 1234-5678",
+      },
+    };
+
+    render(
+      <ReminderCard
+        reminder={reminderWithContact}
+        onToggleComplete={jest.fn()}
+        onDelete={jest.fn()}
+      />,
+    );
+
+    const chip = screen.getByLabelText(/Contacto Carlos Ruiz/i);
+    fireEvent.press(chip);
+
+    expect(Linking.canOpenURL).toHaveBeenCalledWith("tel:+5491112345678");
+  });
+
+  test("no renderiza chip de contacto si reminder.contact no está presente", () => {
+    render(
+      <ReminderCard
+        reminder={baseReminder}
+        onToggleComplete={jest.fn()}
+        onDelete={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/Contacto/i)).toBeNull();
+  });
 });
 
