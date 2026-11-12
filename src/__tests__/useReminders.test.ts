@@ -16,12 +16,14 @@ jest.mock("@react-navigation/native", () => ({
 const mockProgramar = jest.fn();
 const mockCancelar = jest.fn();
 const mockCancelarMultiples = jest.fn();
+const mockSincronizarBadge = jest.fn();
 
 jest.mock("../hooks/useLocalNotifications", () => ({
   useLocalNotifications: () => ({
     programarNotificacion: mockProgramar,
     cancelarNotificacion: mockCancelar,
     cancelarMultiplesNotificaciones: mockCancelarMultiples,
+    sincronizarBadgePendientes: mockSincronizarBadge,
   }),
 }));
 
@@ -76,6 +78,51 @@ describe("useReminders Hook Refactored", () => {
       }),
       "user_test"
     );
+    expect(mockSincronizarBadge).toHaveBeenCalledWith("user_test");
+  });
+
+  it("toggleComplete reprograma con opciones enriquecidas al desmarcar un recordatorio completado", async () => {
+    const updateSpy = jest.fn().mockResolvedValue(true);
+    mockProgramar.mockResolvedValue("new-notif-777");
+    useReminderStore.setState({ updateReminder: updateSpy });
+
+    const completedReminder: Reminder = {
+      ...sampleReminder,
+      id: "test-completed",
+      completed: true,
+      notificationId: null,
+      leadTimeSeconds: 0,
+      targetTimestamp: Date.now() + 60000,
+      category: "urgente",
+    };
+
+    useReminderStore.setState({ reminders: [completedReminder] });
+
+    const { result } = renderHook(() => useReminders("user_test"));
+
+    await act(async () => {
+      await result.current.toggleComplete("test-completed");
+    });
+
+    expect(mockProgramar).toHaveBeenCalledWith(
+      completedReminder.title,
+      completedReminder.description,
+      expect.any(Number),
+      expect.objectContaining({
+        category: "urgente",
+        reminderId: "test-completed",
+        username: "user_test",
+      })
+    );
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "test-completed",
+        completed: false,
+        notificationId: "new-notif-777",
+      }),
+      "user_test"
+    );
+    expect(mockSincronizarBadge).toHaveBeenCalledWith("user_test");
   });
 
   it("confirmAndDelete muestra alerta y llama a deleteReminder del store al confirmar", async () => {
