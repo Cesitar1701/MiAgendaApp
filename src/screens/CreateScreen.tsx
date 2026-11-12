@@ -22,7 +22,10 @@ import DateTimePicker, {
 
 import { RootStackParamList, CategoryType, Reminder, ReminderLocation, ReminderContact } from "../types";
 import { useReminderStore } from "../store/useReminderStore";
-import { useLocalNotifications } from "../hooks/useLocalNotifications";
+import {
+  useLocalNotifications,
+  sincronizarBadgePendientes,
+} from "../hooks/useLocalNotifications";
 import { useCamera } from "../hooks/useCamera";
 import { useDeviceContacts } from "../hooks/useDeviceContacts";
 import { useDeviceCalendar } from "../hooks/useDeviceCalendar";
@@ -237,6 +240,10 @@ export default function CreateScreen({ navigation, route }: Props) {
       return;
     }
 
+    const reminderId = editingReminder
+      ? editingReminder.id
+      : Date.now().toString();
+
     let notifId: string | null = null;
     if (withNotification) {
       const secondsRemaining = calcularSegundosRestantes(
@@ -261,6 +268,14 @@ export default function CreateScreen({ navigation, route }: Props) {
           title.trim(),
           description.trim(),
           secondsRemaining,
+          {
+            category: selectedCategory,
+            reminderId,
+            username: username ?? editingReminder?.username,
+            targetDate: formattedDate,
+            targetTime: formattedTime,
+            leadTimeSeconds: withNotification ? leadTimeSeconds : null,
+          },
         );
 
         if (!notifId) {
@@ -305,7 +320,7 @@ export default function CreateScreen({ navigation, route }: Props) {
     }
 
     const reminderPayload: Reminder = {
-      id: editingReminder ? editingReminder.id : Date.now().toString(),
+      id: reminderId,
       username: username ?? editingReminder?.username,
       title: title.trim(),
       description: description.trim(),
@@ -328,6 +343,9 @@ export default function CreateScreen({ navigation, route }: Props) {
       : await addReminder(reminderPayload, username);
 
     if (saved) {
+      await sincronizarBadgePendientes(
+        username ?? editingReminder?.username,
+      ).catch(() => {});
       navigation.goBack();
     } else {
       Alert.alert(

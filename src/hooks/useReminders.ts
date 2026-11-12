@@ -16,12 +16,17 @@ export function useReminders(username: string) {
     programarNotificacion,
     cancelarNotificacion,
     cancelarMultiplesNotificaciones,
+    sincronizarBadgePendientes,
   } = useLocalNotifications();
 
   useFocusEffect(
     useCallback(() => {
-      loadReminders(username);
-    }, [username, loadReminders]),
+      Promise.resolve(loadReminders(username))
+        .then(() => {
+          sincronizarBadgePendientes?.(username);
+        })
+        .catch(() => {});
+    }, [username, loadReminders, sincronizarBadgePendientes]),
   );
 
   const toggleComplete = useCallback(
@@ -50,6 +55,14 @@ export function useReminders(username: string) {
             target.title,
             target.description,
             secondsRemaining,
+            {
+              category: target.category,
+              reminderId: target.id,
+              username,
+              targetDate: target.date,
+              targetTime: target.time,
+              leadTimeSeconds: target.leadTimeSeconds,
+            },
           );
         }
       }
@@ -67,6 +80,7 @@ export function useReminders(username: string) {
       };
 
       await updateReminder(updatedReminder, username);
+      await sincronizarBadgePendientes?.(username);
     },
     [
       reminders,
@@ -74,6 +88,7 @@ export function useReminders(username: string) {
       cancelarNotificacion,
       programarNotificacion,
       updateReminder,
+      sincronizarBadgePendientes,
     ],
   );
 
@@ -93,12 +108,19 @@ export function useReminders(username: string) {
                 await cancelarNotificacion(target.notificationId);
               }
               await deleteReminder(id, username);
+              await sincronizarBadgePendientes?.(username);
             },
           },
         ],
       );
     },
-    [reminders, username, cancelarNotificacion, deleteReminder],
+    [
+      reminders,
+      username,
+      cancelarNotificacion,
+      deleteReminder,
+      sincronizarBadgePendientes,
+    ],
   );
 
   const cancelUserNotifications = useCallback(async () => {
