@@ -1,8 +1,21 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
 import ReminderCard from "../components/ReminderCard";
 import { Reminder } from "../types";
+
+const mockEliminarEventoCalendario = jest.fn().mockResolvedValue(true);
+
+jest.mock("../hooks/useDeviceCalendar", () => ({
+  useDeviceCalendar: () => ({
+    eliminarEventoCalendario: mockEliminarEventoCalendario,
+    crearEventoCalendario: jest.fn(),
+    actualizarEventoCalendario: jest.fn(),
+    solicitarPermisoCalendario: jest.fn(),
+    obtenerCalendarId: jest.fn(),
+    loading: false,
+  }),
+}));
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
@@ -28,6 +41,7 @@ describe("Componente: ReminderCard", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   test("renderiza chip de ubicación con dirección cuando reminder.location está presente", () => {
@@ -147,6 +161,110 @@ describe("Componente: ReminderCard", () => {
     );
 
     expect(screen.queryByLabelText(/Contacto/i)).toBeNull();
+  });
+
+  test("renderiza badge de sincronización cuando reminder.calendarEventId está presente", () => {
+    const reminderWithCalendar: Reminder = {
+      ...baseReminder,
+      calendarEventId: "native-cal-event-999",
+    };
+
+    render(
+      <ReminderCard
+        reminder={reminderWithCalendar}
+        onToggleComplete={jest.fn()}
+        onDelete={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Sincronizado")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Sincronizado con el calendario nativo"),
+    ).toBeTruthy();
+  });
+
+  test("no renderiza badge de sincronización cuando reminder.calendarEventId no está presente", () => {
+    render(
+      <ReminderCard
+        reminder={baseReminder}
+        onToggleComplete={jest.fn()}
+        onDelete={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Sincronizado")).toBeNull();
+    expect(
+      screen.queryByLabelText("Sincronizado con el calendario nativo"),
+    ).toBeNull();
+  });
+
+  test("al eliminar un recordatorio sincronizado remueve el evento nativo con eliminarEventoCalendario y llama a onDelete", async () => {
+    const onDeleteMock = jest.fn();
+    const reminderWithCalendar: Reminder = {
+      ...baseReminder,
+      calendarEventId: "native-cal-event-999",
+    };
+
+    render(
+      <ReminderCard
+        reminder={reminderWithCalendar}
+        onToggleComplete={jest.fn()}
+        onDelete={onDeleteMock}
+      />,
+    );
+
+    const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
+    fireEvent.press(deleteBtn);
+
+    await waitFor(() => {
+      expect(mockEliminarEventoCalendario).toHaveBeenCalledWith("native-cal-event-999");
+      expect(onDeleteMock).toHaveBeenCalledWith("1");
+    });
+  });
+
+  test("al eliminar un recordatorio no sincronizado solo llama a onDelete sin llamar a eliminarEventoCalendario", async () => {
+    const onDeleteMock = jest.fn();
+
+    render(
+      <ReminderCard
+        reminder={baseReminder}
+        onToggleComplete={jest.fn()}
+        onDelete={onDeleteMock}
+      />,
+    );
+
+    const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
+    fireEvent.press(deleteBtn);
+
+    await waitFor(() => {
+      expect(mockEliminarEventoCalendario).not.toHaveBeenCalled();
+      expect(onDeleteMock).toHaveBeenCalledWith("1");
+    });
+  });
+
+  test("si eliminarEventoCalendario falla, continúa y llama a onDelete sin interrumpir la app", async () => {
+    mockEliminarEventoCalendario.mockRejectedValueOnce(new Error("Error nativo"));
+    const onDeleteMock = jest.fn();
+    const reminderWithCalendar: Reminder = {
+      ...baseReminder,
+      calendarEventId: "error-cal-event",
+    };
+
+    render(
+      <ReminderCard
+        reminder={reminderWithCalendar}
+        onToggleComplete={jest.fn()}
+        onDelete={onDeleteMock}
+      />,
+    );
+
+    const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
+    fireEvent.press(deleteBtn);
+
+    await waitFor(() => {
+      expect(mockEliminarEventoCalendario).toHaveBeenCalledWith("error-cal-event");
+      expect(onDeleteMock).toHaveBeenCalledWith("1");
+    });
   });
 });
 

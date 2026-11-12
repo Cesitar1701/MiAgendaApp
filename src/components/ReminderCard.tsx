@@ -5,6 +5,7 @@ import { Reminder, ReminderLocation, ReminderContact } from "../types";
 import { CATEGORIAS } from "../constants/categories";
 import { COLORS, RADIUS } from "../constants/theme";
 import ImagePreviewModal from "./ImagePreviewModal";
+import { useDeviceCalendar } from "../hooks/useDeviceCalendar";
 
 interface Props {
   reminder: Reminder;
@@ -21,6 +22,18 @@ export default function ReminderCard({
 }: Props) {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const categoryConfig = CATEGORIAS[reminder.category] || CATEGORIAS.personal;
+  const { eliminarEventoCalendario } = useDeviceCalendar();
+
+  const handleDelete = async () => {
+    if (reminder.calendarEventId) {
+      try {
+        await eliminarEventoCalendario(reminder.calendarEventId);
+      } catch (err) {
+        console.warn("[ReminderCard] Error al remover evento del calendario:", err);
+      }
+    }
+    onDelete(reminder.id);
+  };
 
   const handleOpenMap = (location: ReminderLocation, title: string) => {
     const lat = location.latitude;
@@ -84,6 +97,17 @@ export default function ReminderCard({
           </Text>
 
           <View style={styles.rightActions}>
+            {reminder.calendarEventId ? (
+              <View
+                style={styles.calendarBadge}
+                accessibilityRole="text"
+                accessibilityLabel="Sincronizado con el calendario nativo"
+              >
+                <Feather name="calendar" size={11} color={COLORS.primary} />
+                <Text style={styles.calendarBadgeText}>Sincronizado</Text>
+              </View>
+            ) : null}
+
             <View
               style={[styles.badge, { backgroundColor: categoryConfig.bg }]}
             >
@@ -212,7 +236,7 @@ export default function ReminderCard({
             ) : null}
 
             <TouchableOpacity
-              onPress={() => onDelete(reminder.id)}
+              onPress={handleDelete}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
               accessibilityLabel="Eliminar recordatorio"
@@ -280,6 +304,22 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  calendarBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.md,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.primaryAccentBorder,
+  },
+  calendarBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
   checkbox: {
     width: 22,
