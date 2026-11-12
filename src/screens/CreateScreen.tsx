@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   Image,
+  Switch,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import { useReminderStore } from "../store/useReminderStore";
 import { useLocalNotifications } from "../hooks/useLocalNotifications";
 import { useCamera } from "../hooks/useCamera";
 import { useDeviceContacts } from "../hooks/useDeviceContacts";
+import { useDeviceCalendar } from "../hooks/useDeviceCalendar";
 import {
   toISODateString,
   formatDisplayDate,
@@ -82,6 +84,28 @@ export default function CreateScreen({ navigation, route }: Props) {
     solicitarPermisoContactos,
     cargarContactos,
   } = useDeviceContacts();
+
+  const {
+    solicitarPermisoCalendario,
+    crearEventoCalendario,
+    actualizarEventoCalendario,
+    eliminarEventoCalendario,
+  } = useDeviceCalendar();
+
+  const [syncWithCalendar, setSyncWithCalendar] = useState<boolean>(() =>
+    Boolean(editingReminder?.calendarEventId),
+  );
+
+  const handleToggleCalendarSync = async (value: boolean) => {
+    if (value) {
+      const granted = await solicitarPermisoCalendario();
+      if (!granted) {
+        setSyncWithCalendar(false);
+        return;
+      }
+    }
+    setSyncWithCalendar(value);
+  };
 
   const handleOpenContactPicker = async () => {
     const hasPermission = await solicitarPermisoContactos();
@@ -247,6 +271,39 @@ export default function CreateScreen({ navigation, route }: Props) {
       await cancelarNotificacion(editingReminder.notificationId);
     }
 
+    // Sincronización con el calendario nativo del teléfono
+    let calendarEventId: string | undefined = editingReminder?.calendarEventId;
+
+    if (syncWithCalendar) {
+      const eventPayload = {
+        title: title.trim(),
+        description: description.trim(),
+        startDate: selectedDate,
+        endDate: new Date(selectedDate.getTime() + 60 * 60 * 1000),
+        location: location ?? undefined,
+        leadTimeSeconds: withNotification ? leadTimeSeconds : null,
+      };
+
+      if (calendarEventId) {
+        const updated = await actualizarEventoCalendario(
+          calendarEventId,
+          eventPayload,
+        );
+        if (!updated) {
+          const newId = await crearEventoCalendario(eventPayload);
+          calendarEventId = newId ?? calendarEventId;
+        }
+      } else {
+        const createdId = await crearEventoCalendario(eventPayload);
+        if (createdId) {
+          calendarEventId = createdId;
+        }
+      }
+    } else if (calendarEventId) {
+      await eliminarEventoCalendario(calendarEventId);
+      calendarEventId = undefined;
+    }
+
     const reminderPayload: Reminder = {
       id: editingReminder ? editingReminder.id : Date.now().toString(),
       username: username ?? editingReminder?.username,
@@ -263,6 +320,7 @@ export default function CreateScreen({ navigation, route }: Props) {
       imageUri: imageUri ?? null,
       location: location ?? undefined,
       contact: contact ?? undefined,
+      calendarEventId: calendarEventId ?? undefined,
     };
 
     const saved = isEditing
@@ -555,6 +613,54 @@ export default function CreateScreen({ navigation, route }: Props) {
                   : "Agregar notificación"}
               </Text>
             </TouchableOpacity>
+
+            {/* Switch de sincronización con el calendario nativo del teléfono */}
+            <View
+              style={[
+                styles.calendarSyncCard,
+                syncWithCalendar && styles.calendarSyncCardActive,
+              ]}
+            >
+              <View style={styles.calendarSyncInfo}>
+                <View style={styles.calendarSyncHeader}>
+                  <Feather
+                    name="calendar"
+                    size={16}
+                    color={syncWithCalendar ? COLORS.primary : COLORS.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.calendarSyncTitle,
+                      syncWithCalendar && styles.calendarSyncTitleActive,
+                    ]}
+                  >
+                    Sincronizar en el calendario del teléfono
+                  </Text>
+                </View>
+                <Text style={styles.calendarSyncSubtitle}>
+                  {syncWithCalendar
+                    ? "Se sincronizará con la app Calendario del dispositivo"
+                    : "No se guardará en el calendario nativo"}
+                </Text>
+              </View>
+              <Switch
+                value={syncWithCalendar}
+                onValueChange={handleToggleCalendarSync}
+                trackColor={{
+                  false: COLORS.border,
+                  true: COLORS.primaryAccentBorder,
+                }}
+                thumbColor={
+                  syncWithCalendar
+                    ? COLORS.primary
+                    : Platform.OS === "android"
+                      ? "#f4f3f4"
+                      : undefined
+                }
+                accessibilityRole="switch"
+                accessibilityLabel="Sincronizar en el calendario del teléfono"
+              />
+            </View>
 
             <CustomButton
               title={isEditing ? "Guardar cambios" : "Guardar recordatorio"}
@@ -926,6 +1032,46 @@ const styles = StyleSheet.create({
   },
   notificationToggleTextActive: {
     color: COLORS.primary,
+  },
+  calendarSyncCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  calendarSyncCardActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primaryAccentBorder,
+  },
+  calendarSyncInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  calendarSyncHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 2,
+  },
+  calendarSyncTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textBody,
+    flexShrink: 1,
+  },
+  calendarSyncTitleActive: {
+    color: COLORS.primary,
+  },
+  calendarSyncSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSubtle,
+    marginLeft: 24,
   },
   dialogOverlay: {
     flex: 1,
