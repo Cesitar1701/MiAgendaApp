@@ -19,10 +19,11 @@ import DateTimePicker, {
   DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
 
-import { RootStackParamList, CategoryType, Reminder, ReminderLocation } from "../types";
+import { RootStackParamList, CategoryType, Reminder, ReminderLocation, ReminderContact } from "../types";
 import { useReminderStore } from "../store/useReminderStore";
 import { useLocalNotifications } from "../hooks/useLocalNotifications";
 import { useCamera } from "../hooks/useCamera";
+import { useDeviceContacts } from "../hooks/useDeviceContacts";
 import {
   toISODateString,
   formatDisplayDate,
@@ -34,6 +35,7 @@ import {
 import CategorySelector from "../components/CategorySelector";
 import NotificationModals from "../components/NotificationModals";
 import MapLocationPickerModal from "../components/MapLocationPickerModal";
+import ContactPickerModal from "../components/ContactPickerModal";
 import CustomButton from "../components/CustomButton";
 import { COLORS, RADIUS } from "../constants/theme";
 
@@ -70,6 +72,24 @@ export default function CreateScreen({ navigation, route }: Props) {
     () => editingReminder?.location ?? null,
   );
   const [showMapModal, setShowMapModal] = useState<boolean>(false);
+  const [contact, setContact] = useState<ReminderContact | null>(
+    () => editingReminder?.contact ?? null,
+  );
+  const [showContactModal, setShowContactModal] = useState<boolean>(false);
+  const {
+    contacts: deviceContacts,
+    loading: loadingContacts,
+    solicitarPermisoContactos,
+    cargarContactos,
+  } = useDeviceContacts();
+
+  const handleOpenContactPicker = async () => {
+    const hasPermission = await solicitarPermisoContactos();
+    if (hasPermission) {
+      setShowContactModal(true);
+      await cargarContactos();
+    }
+  };
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (editingReminder) {
@@ -242,6 +262,7 @@ export default function CreateScreen({ navigation, route }: Props) {
       notificationId: notifId,
       imageUri: imageUri ?? null,
       location: location ?? undefined,
+      contact: contact ?? undefined,
     };
 
     const saved = isEditing
@@ -461,6 +482,55 @@ export default function CreateScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             )}
 
+            {/* Contacto asignado / Botón Asociar contacto */}
+            {contact ? (
+              <View style={styles.contactAttachedBox}>
+                <View style={styles.contactIconBox}>
+                  <Feather name="user" size={18} color={COLORS.primary} />
+                </View>
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactAttachedTitle}>
+                    Contacto asociado
+                  </Text>
+                  <Text style={styles.contactNameText} numberOfLines={1}>
+                    {contact.name}
+                  </Text>
+                  {contact.phone || contact.email ? (
+                    <Text style={styles.contactPhoneText} numberOfLines={1}>
+                      {contact.phone || contact.email}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={handleOpenContactPicker}
+                    activeOpacity={0.7}
+                    style={styles.changeContactButton}
+                  >
+                    <Text style={styles.changeContactText}>
+                      Cambiar contacto
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setContact(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Quitar contacto asociado"
+                >
+                  <Feather name="trash-2" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.contactButton}
+                onPress={handleOpenContactPicker}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Asociar contacto"
+              >
+                <Feather name="user-plus" size={16} color={COLORS.textMuted} />
+                <Text style={styles.contactButtonText}>Agregar contacto</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[
                 styles.notificationToggle,
@@ -506,6 +576,17 @@ export default function CreateScreen({ navigation, route }: Props) {
         initialLocation={location}
         onClose={() => setShowMapModal(false)}
         onConfirm={(loc) => setLocation(loc)}
+      />
+
+      <ContactPickerModal
+        visible={showContactModal}
+        contacts={deviceContacts}
+        loading={loadingContacts}
+        onClose={() => setShowContactModal(false)}
+        onSelectContact={(c) => {
+          setContact(c);
+          setShowContactModal(false);
+        }}
       />
 
       {/* Selector de Fecha/Hora para iOS */}
@@ -754,6 +835,70 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   changeLocationText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.primary,
+  },
+  contactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    backgroundColor: COLORS.background,
+  },
+  contactButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+  },
+  contactAttachedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryAccentBorder,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  contactIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactAttachedTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+  contactNameText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    marginTop: 2,
+  },
+  contactPhoneText: {
+    fontSize: 12,
+    color: COLORS.textSubtle,
+    marginTop: 1,
+  },
+  changeContactButton: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  changeContactText: {
     fontSize: 12,
     fontWeight: "600",
     color: COLORS.primary,

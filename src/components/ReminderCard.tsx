@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
-import { Reminder, ReminderLocation } from "../types";
+import { Reminder, ReminderLocation, ReminderContact } from "../types";
 import { CATEGORIAS } from "../constants/categories";
 import { COLORS, RADIUS } from "../constants/theme";
 import ImagePreviewModal from "./ImagePreviewModal";
@@ -48,6 +48,20 @@ export default function ReminderCard({
           `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
         );
       });
+  };
+
+  const handleContactPress = (contact: ReminderContact) => {
+    if (contact.phone) {
+      const cleanPhone = contact.phone.replace(/[^0-9+]/g, "");
+      const url = `tel:${cleanPhone}`;
+      Linking.canOpenURL(url)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(url);
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   return (
@@ -130,6 +144,27 @@ export default function ReminderCard({
             <Text style={styles.locationChipText} numberOfLines={1}>
               {reminder.location.address ||
                 `${reminder.location.latitude.toFixed(4)}, ${reminder.location.longitude.toFixed(4)}`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Chip de Contacto */}
+        {reminder.contact ? (
+          <TouchableOpacity
+            style={styles.contactChip}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              handleContactPress(reminder.contact!);
+            }}
+            activeOpacity={reminder.contact.phone ? 0.75 : 1}
+            disabled={!reminder.contact.phone}
+            accessibilityRole="button"
+            accessibilityLabel={`Contacto ${reminder.contact.name}${reminder.contact.phone ? `, teléfono ${reminder.contact.phone}` : ""}`}
+          >
+            <Feather name="user" size={12} color={COLORS.primary} />
+            <Text style={styles.contactChipText} numberOfLines={1}>
+              {reminder.contact.name}
+              {reminder.contact.phone ? ` • ${reminder.contact.phone}` : ""}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -288,6 +323,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     color: COLORS.primaryDark,
+    flexShrink: 1,
+  },
+  contactChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.backgroundAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    gap: 6,
+    maxWidth: "100%",
+  },
+  contactChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: COLORS.textSecondary,
     flexShrink: 1,
   },
   footerRow: {

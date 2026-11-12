@@ -25,6 +25,12 @@
           "locationAlwaysAndWhenInUsePermission": "MiAgenda necesita acceder a tu ubicacion para asociar el lugar a tus recordatorios."
         }
       ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "MiAgenda necesita acceso a tus contactos para asociarlos a tus recordatorios."
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-status-bar"
     ],
@@ -34,6 +40,10 @@
       "supportsTablet": true
     },
     "android": {
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
