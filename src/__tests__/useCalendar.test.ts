@@ -329,7 +329,7 @@ describe("useDeviceCalendar Hook", () => {
         eventId = await result.current.crearEventoCalendario({
           title: "Reunión de planificación",
           description: "Definir metas del sprint",
-          date: "15/11/2026",
+          isoDate: "2026-11-15",
           time: "10:00",
           location: {
             latitude: -34.6037,
@@ -362,7 +362,7 @@ describe("useDeviceCalendar Hook", () => {
       await act(async () => {
         eventId = await result.current.crearEventoCalendario({
           title: "Evento con Zona Horaria",
-          date: "15/11/2026",
+          isoDate: "2026-11-15",
           time: "10:00",
           timeZone: "America/Argentina/Buenos_Aires",
         });
@@ -389,7 +389,7 @@ describe("useDeviceCalendar Hook", () => {
       await act(async () => {
         eventId = await result.current.crearEventoCalendario({
           title: "Reunión sin permisos",
-          date: "15/11/2026",
+          isoDate: "2026-11-15",
           time: "10:00",
         });
       });
@@ -407,7 +407,7 @@ describe("useDeviceCalendar Hook", () => {
       await act(async () => {
         eventId = await result.current.crearEventoCalendario({
           title: "Reunión sin calendario",
-          date: "15/11/2026",
+          isoDate: "2026-11-15",
           time: "10:00",
         });
       });
@@ -430,7 +430,7 @@ describe("useDeviceCalendar Hook", () => {
       await act(async () => {
         eventId = await result.current.crearEventoCalendario({
           title: "Reunión fallida",
-          date: "15/11/2026",
+          isoDate: "2026-11-15",
           time: "10:00",
         });
       });

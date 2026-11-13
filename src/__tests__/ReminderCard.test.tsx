@@ -1,21 +1,8 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent } from "@testing-library/react-native";
 import { Linking } from "react-native";
-import ReminderCard from "../components/ReminderCard";
+import ReminderCard from "../components/reminders/ReminderCard";
 import { Reminder } from "../types";
-
-const mockEliminarEventoCalendario = jest.fn().mockResolvedValue(true);
-
-jest.mock("../hooks/useDeviceCalendar", () => ({
-  useDeviceCalendar: () => ({
-    eliminarEventoCalendario: mockEliminarEventoCalendario,
-    crearEventoCalendario: jest.fn(),
-    actualizarEventoCalendario: jest.fn(),
-    solicitarPermisoCalendario: jest.fn(),
-    obtenerCalendarId: jest.fn(),
-    loading: false,
-  }),
-}));
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
@@ -33,8 +20,10 @@ describe("Componente: ReminderCard", () => {
     id: "1",
     title: "Reunión de equipo",
     description: "Revisión semanal",
-    date: "06/11/2026",
+    date: "06 nov 2026",
+    isoDate: "2026-11-06",
     time: "15:00",
+    targetTimestamp: new Date(2026, 10, 6, 15, 0).getTime(),
     category: "trabajo",
     completed: false,
   };
@@ -66,7 +55,7 @@ describe("Componente: ReminderCard", () => {
   });
 
   test("al presionar el chip de ubicación abre la URL nativa de mapas con Linking.openURL", async () => {
-    const openURLSpy = jest.spyOn(Linking, "openURL").mockResolvedValue(true as never);
+    jest.spyOn(Linking, "openURL").mockResolvedValue(true as never);
     jest.spyOn(Linking, "canOpenURL").mockResolvedValue(true as never);
 
     const reminderWithLocation: Reminder = {
@@ -126,7 +115,7 @@ describe("Componente: ReminderCard", () => {
   });
 
   test("al presionar el chip de contacto con teléfono intenta abrir la URL tel: mediante Linking", async () => {
-    const openURLSpy = jest.spyOn(Linking, "openURL").mockResolvedValue(true as never);
+    jest.spyOn(Linking, "openURL").mockResolvedValue(true as never);
     jest.spyOn(Linking, "canOpenURL").mockResolvedValue(true as never);
 
     const reminderWithContact: Reminder = {
@@ -198,7 +187,7 @@ describe("Componente: ReminderCard", () => {
     ).toBeNull();
   });
 
-  test("al eliminar un recordatorio sincronizado remueve el evento nativo con eliminarEventoCalendario y llama a onDelete", async () => {
+  test("delega la eliminación únicamente a onDelete con el id del recordatorio", () => {
     const onDeleteMock = jest.fn();
     const reminderWithCalendar: Reminder = {
       ...baseReminder,
@@ -216,55 +205,25 @@ describe("Componente: ReminderCard", () => {
     const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
     fireEvent.press(deleteBtn);
 
-    await waitFor(() => {
-      expect(mockEliminarEventoCalendario).toHaveBeenCalledWith("native-cal-event-999");
-      expect(onDeleteMock).toHaveBeenCalledWith("1");
-    });
+    expect(onDeleteMock).toHaveBeenCalledTimes(1);
+    expect(onDeleteMock).toHaveBeenCalledWith("1");
   });
 
-  test("al eliminar un recordatorio no sincronizado solo llama a onDelete sin llamar a eliminarEventoCalendario", async () => {
-    const onDeleteMock = jest.fn();
+  test("ejecuta onToggleComplete al presionar el checkbox", () => {
+    const onToggleMock = jest.fn();
 
     render(
       <ReminderCard
         reminder={baseReminder}
-        onToggleComplete={jest.fn()}
-        onDelete={onDeleteMock}
+        onToggleComplete={onToggleMock}
+        onDelete={jest.fn()}
       />,
     );
 
-    const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
-    fireEvent.press(deleteBtn);
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.press(checkbox);
 
-    await waitFor(() => {
-      expect(mockEliminarEventoCalendario).not.toHaveBeenCalled();
-      expect(onDeleteMock).toHaveBeenCalledWith("1");
-    });
-  });
-
-  test("si eliminarEventoCalendario falla, continúa y llama a onDelete sin interrumpir la app", async () => {
-    mockEliminarEventoCalendario.mockRejectedValueOnce(new Error("Error nativo"));
-    const onDeleteMock = jest.fn();
-    const reminderWithCalendar: Reminder = {
-      ...baseReminder,
-      calendarEventId: "error-cal-event",
-    };
-
-    render(
-      <ReminderCard
-        reminder={reminderWithCalendar}
-        onToggleComplete={jest.fn()}
-        onDelete={onDeleteMock}
-      />,
-    );
-
-    const deleteBtn = screen.getByLabelText("Eliminar recordatorio");
-    fireEvent.press(deleteBtn);
-
-    await waitFor(() => {
-      expect(mockEliminarEventoCalendario).toHaveBeenCalledWith("error-cal-event");
-      expect(onDeleteMock).toHaveBeenCalledWith("1");
-    });
+    expect(onToggleMock).toHaveBeenCalledTimes(1);
+    expect(onToggleMock).toHaveBeenCalledWith("1");
   });
 });
-

@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { COLORS, RADIUS } from "../constants/theme";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 interface Props {
   visible: boolean;
@@ -37,10 +37,7 @@ export default function ImagePreviewModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        <View
-          style={styles.card}
-          onStartShouldSetResponder={() => true}
-        >
+        <View style={styles.card} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <Text style={styles.title} numberOfLines={1}>
               {title || "Foto del recordatorio"}
@@ -124,3 +121,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

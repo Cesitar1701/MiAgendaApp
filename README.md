@@ -1,118 +1,177 @@
-# Aplicaciones Móviles: Agenda y Recordatorios
+# MiAgendaApp — Gestión de Agenda y Recordatorios
 
-**Alumno:** César Roberto Carlos  
-**Plataforma:** React Native (Expo SDK 58 - Modo Gestionado)
+**Autor:** César Roberto Carlos  
+**Plataforma:** React Native (Expo SDK 58 — Modo Gestionado)
 
-Aplicación móvil orientada a la gestión integral de tareas, agenda personal y programación de recordatorios con integración de hardware del dispositivo, notificaciones push locales y sincronización con el calendario nativo.
+Aplicación móvil orientada a la gestión integral de tareas, agenda personal y programación de recordatorios con integración nativa de hardware del dispositivo, notificaciones locales interactivas, selector de ubicación en mapa, sincronización con calendario nativo y gestión de estado global con Zustand.
 
 ---
 
 ## Tabla de Contenidos
 
-1. [Visión General y Nuevas Funcionalidades](#1-visión-general-y-nuevas-funcionalidades)
-   - [Manejo Seguro de Permisos](#11-manejo-seguro-de-permisos)
-   - [Cámara y Galería de Imágenes](#12-cámara-y-galería-de-imágenes)
-   - [Ubicación GPS y Selector en Mapa](#13-ubicación-gps-y-selector-en-mapa)
-   - [Integración con Contactos del Dispositivo](#14-integración-con-contactos-del-dispositivo)
-   - [Sincronización con Calendario Nativo](#15-sincronización-con-calendario-nativo)
-   - [Estado Global con Zustand](#16-estado-global-con-zustand)
-   - [Suite de Pruebas Automatizadas (Testing)](#17-suite-de-pruebas-automatizadas-testing)
-2. [Stack Tecnológico y Dependencias](#2-stack-tecnológico-y-dependencias)
-3. [Instalación y Ejecución](#3-instalación-y-ejecución)
-   - [Requisitos Previos](#31-requisitos-previos)
-   - [Instalación de Dependencias](#32-instalación-de-dependencias)
-   - [Iniciar la Aplicación](#33-iniciar-la-aplicación)
-   - [Ejecutar las Pruebas Unitarias](#34-ejecutar-las-pruebas-unitarias)
-4. [Documentación de Prompts Utilizados](#4-documentación-de-prompts-utilizados)
-5. [Demostración en Videos](#5-demostración-en-video)
+1. [Arquitectura y Estructura del Proyecto](#1-arquitectura-y-estructura-del-proyecto)
+2. [Funcionalidades Principales](#2-funcionalidades-principales)
+   - [Autenticación y Navegación Declarativa (`useAuthStore`)](#21-autenticación-y-navegación-declarativa-useauthstore)
+   - [Gestión de Recordatorios y Filtros (`useReminderStore` + `useReminders`)](#22-gestión-de-recordatorios-y-filtros-usereminderstore--usereminders)
+   - [Manejo Seguro y Unificado de Permisos](#23-manejo-seguro-y-unificado-de-permisos)
+   - [Cámara y Galería de Imágenes](#24-cámara-y-galería-de-imágenes)
+   - [Ubicación GPS y Mapa Interactivo Optimizado](#25-ubicación-gps-y-mapa-interactivo-optimizado)
+   - [Integración con Contactos del Dispositivo](#26-integración-con-contactos-del-dispositivo)
+   - [Sincronización con Calendario Nativo](#27-sincronización-con-calendario-nativo)
+   - [Notificaciones Locales y Ciclo de Vida](#28-notificaciones-locales-y-ciclo-de-vida)
+   - [Suite de Pruebas Automatizadas (Testing)](#29-suite-de-pruebas-automatizadas-testing)
+3. [Stack Tecnológico y Dependencias](#3-stack-tecnológico-y-dependencias)
+4. [Instalación y Ejecución](#4-instalación-y-ejecución)
+   - [Requisitos Previos](#41-requisitos-previos)
+   - [Instalación de Dependencias](#42-instalación-de-dependencias)
+   - [Iniciar la Aplicación](#43-iniciar-la-aplicación)
+   - [Verificación de Tipos y Pruebas Unitarias](#44-verificación-de-tipos-y-pruebas-unitarias)
+5. [Demostración en Video](#5-demostración-en-video)
 
 ---
 
-## 1. Visión General y Nuevas Funcionalidades
+## 1. Arquitectura y Estructura del Proyecto
 
-La aplicación ha evolucionado desde una libreta de notas simple hacia un gestor de productividad multisensorial que interactúa activamente con el hardware del teléfono inteligente.
+El proyecto sigue una arquitectura modular con separación estricta entre **estado global (Zustand)**, **orquestación de dominio y hardware (`hooks/`)**, **persistencia (`services/`)**, **componentes presentacionales (`components/`)** y **navegación declarativa (`navigation/`)**:
 
-### 1.1. Manejo Seguro de Permisos
+```text
+MiAgendaApp/
+├── App.tsx                                 # Punto de entrada: hidrata sesión y listeners de notificaciones
+├── app.json                                # Configuración de Expo y permisos declarados
+├── src/
+│   ├── types.ts                            # Entidades canónicas (Reminder, RootStackParamList)
+│   ├── navigation/
+│   │   └── RootNavigator.tsx               # Stack declarativo según estado de sesión en useAuthStore
+│   ├── store/
+│   │   ├── useAuthStore.ts                 # Estado global de autenticación e hidratación
+│   │   └── useReminderStore.ts             # Estado global de recordatorios y filtros de agenda
+│   ├── screens/
+│   │   ├── LoginScreen.tsx                 # Inicio de sesión conectado a useAuthStore
+│   │   ├── RegisterScreen.tsx              # Registro de usuarios conectado a useAuthStore
+│   │   ├── HomeScreen.tsx                  # Agenda diaria/próxima con filtros globales
+│   │   └── CreateScreen.tsx                # Formulario modal de creación/edición de recordatorios
+│   ├── components/
+│   │   ├── ui/                             # Átomos reutilizables puros
+│   │   │   ├── AttachmentCard.tsx          # Tarjeta unificada para foto, ubicación y contacto
+│   │   │   ├── CustomButton.tsx            # Botón con variantes e íconos
+│   │   │   ├── CustomInput.tsx             # Input reutilizable con soporte de contraseña y multiline
+│   │   │   └── DateTimeField.tsx           # Selector de fecha/hora unificado (Android/iOS)
+│   │   ├── auth/
+│   │   │   └── AuthBrandHeader.tsx         # Encabezado visual de Login/Registro
+│   │   ├── reminders/
+│   │   │   ├── CategorySelector.tsx        # Selector visual de categorías
+│   │   │   ├── ImagePreviewModal.tsx       # Modal de vista previa de imagen adjunta
+│   │   │   └── ReminderCard.tsx            # Tarjeta 100% presentacional de recordatorio
+│   │   └── modals/
+│   │       ├── ContactPickerModal.tsx      # Selector con búsqueda en agenda del dispositivo
+│   │       ├── MapLocationPickerModal.tsx  # Selector en mapa Leaflet/OpenStreetMap vía WebView
+│   │       └── NotificationModals.tsx      # Modales de antelación predefinida y personalizada
+│   ├── hooks/
+│   │   ├── useReminders.ts                 # Orquestador de CRUD, notificaciones y calendario nativo
+│   │   ├── useCamera.ts                    # Acceso a cámara y galería
+│   │   ├── useLocation.ts                  # GPS y geocodificación inversa
+│   │   ├── useDeviceContacts.ts            # Lectura y normalización de contactos
+│   │   ├── useDeviceCalendar.ts            # Creación/edición/eliminación en calendario nativo
+│   │   └── useLocalNotifications.ts        # Notificaciones locales, canales Android, acciones y badges
+│   ├── services/
+│   │   ├── authStorage.ts                  # Persistencia de usuarios con hash y validación de tipos
+│   │   └── reminderStorage.ts              # Persistencia de recordatorios aislada por usuario
+│   ├── utils/
+│   │   ├── dateHelpers.ts                  # Formateo, cálculos de lead time y fechas ISO/timestamp
+│   │   └── permissionHelpers.ts            # requestPermissionSafely y showPermissionAlert
+│   ├── constants/
+│   │   ├── categories.ts                   # Configuración de categorías e íconos
+│   │   └── theme.ts                        # Tokens de colores y radios
+│   └── __tests__/                          # Suite completa de tests unitarios (Jest)
+```
+
+---
+
+## 2. Funcionalidades Principales
+
+### 2.1. Autenticación y Navegación Declarativa (`useAuthStore`)
+- **Ubicación:** `src/store/useAuthStore.ts`, `src/navigation/RootNavigator.tsx`
+- **Características:**
+  - Elimina por completo el *prop drilling* de `username` por rutas y las navegaciones imperativas (`navigation.replace`).
+  - `hydrateSession()` restaura la sesión al iniciar la app desde `@react-native-async-storage/async-storage`.
+  - `RootNavigator` conmuta automáticamente entre el stack público (`Login`, `Register`) y el stack autenticado (`Home`, `Create`) al cambiar `user` en el store.
+  - `logout()` limpia la sesión persistida y resetea inmediatamente la memoria de `useReminderStore`.
+  - Validación de contraseñas hasheadas en `authStorage.ts` con type guards sobre los datos leídos del almacenamiento.
+
+### 2.2. Gestión de Recordatorios y Filtros (`useReminderStore` + `useReminders`)
+- **Ubicación:** `src/store/useReminderStore.ts`, `src/hooks/useReminders.ts`
+- **Características:**
+  - El store mantiene tanto la lista de `reminders` como los filtros activos (`selectedDate`, `isFilterActive`).
+  - `saveReminder` y `updateReminder` retornan directamente la lista filtrada y ordenada del usuario activo, evitando lecturas dobles de disco en `AsyncStorage`.
+  - `useReminders` centraliza toda la lógica de dominio: `saveOrUpdateReminder`, `toggleComplete`, `confirmAndDelete` y `cancelUserNotifications`.
+  - Los componentes visuales como `ReminderCard` son **100% presentacionales** y no ejecutan efectos secundarios destructivos antes de la confirmación del usuario.
+
+### 2.3. Manejo Seguro y Unificado de Permisos
 - **Ubicación:** `src/utils/permissionHelpers.ts`
-- **Problema abordado:** En sistemas Android, cuando el usuario toca fuera del diálogo nativo del sistema para pedir permisos, el modal se descarta pero la promesa subyacente puede quedar en estado *pending* indefinidamente, bloqueando la interfaz de usuario.
-- **Solución implementada (`requestPermissionSafely`):** Implementa un listener activo sobre `AppState.addEventListener('change')`. Cuando la aplicación vuelve al estado `active` luego de la interacción con el sistema operativo, se ejecuta una verificación fallback con la función `getPermissionsAsync()`.
-- **Flujo de 3 estados:**
-  1. **Granted (Concedido):** Acceso inmediato a la funcionalidad de hardware.
-  2. **Denied temporalmente:** Se informa al usuario mediante alerta del motivo por el cual es necesario el permiso.
-  3. **Blocked / CanAskAgain = false:** Se despliega un diálogo con acceso directo a la configuración de la app a través de `Linking.openSettings()`.
+- **Características:**
+  - `requestPermissionSafely`: Escucha `AppState` para evitar que en Android tocar fuera del diálogo nativo deje la promesa de permiso en estado *pending* indefinidamente.
+  - `showPermissionAlert`: Unifica la gestión de alertas cuando un permiso es denegado o bloqueado permanentemente (`canAskAgain === false`), ofreciendo acceso directo a los ajustes del sistema mediante `Linking.openSettings()`.
 
-### 1.2. Cámara y Galería de Imágenes
-- **Ubicación:** `src/hooks/useCamera.ts`, `src/components/ImagePreviewModal.tsx`
+### 2.4. Cámara y Galería de Imágenes
+- **Ubicación:** `src/hooks/useCamera.ts`, `src/components/reminders/ImagePreviewModal.tsx`
 - **Librería:** `expo-image-picker`
 - **Características:**
-  - Permite capturar fotografías al instante con la cámara nativa o elegir imágenes existentes de la galería multimedia.
-  - Recorte y compresión optimizada en relación de aspecto 4:3 y calidad visual del 70% (`quality: 0.7`) para minimizar el uso de memoria en almacenamiento persistente.
-  - Previsualización a pantalla completa en modal con soporte para eliminar o reemplazar la imagen antes y después de guardar el recordatorio.
-  - Almacenamiento seguro del identificador URI dentro del modelo `Reminder.imageUri`.
+  - Captura con cámara nativa o selección desde galería con relación de aspecto `4:3` y compresión al `70%` (`quality: 0.7`).
+  - Previsualización modal a pantalla completa y soporte de reemplazo/eliminación vía `AttachmentCard`.
 
-### 1.3. Ubicación GPS y Selector en Mapa
-- **Ubicación:** `src/hooks/useLocation.ts`, `src/components/MapLocationPickerModal.tsx`
+### 2.5. Ubicación GPS y Mapa Interactivo Optimizado
+- **Ubicación:** `src/hooks/useLocation.ts`, `src/components/modals/MapLocationPickerModal.tsx`
 - **Librerías:** `expo-location`, `react-native-webview`
 - **Características:**
-  - **Detección GPS en tiempo real:** Obtiene latitud y longitud actuales del dispositivo mediante `getCurrentPositionAsync({ accuracy: LocationAccuracy.Balanced })`.
-  - **Geocodificación Inversa (Reverse Geocoding):** Convierte las coordenadas cartográficas en una dirección legible para el usuario (calle, número de puerta, localidad y código postal) utilizando `reverseGeocodeAsync`.
-  - **Selector Interactivo en Mapa (Leaflet / OpenStreetMap):** Interfaz modal con mapa interactivo web embebido donde el usuario puede tocar cualquier punto del mapa, reposicionar el marcador y confirmar la ubicación exacta sin depender de servicios pagos de Google Maps API.
+  - Prioriza la última ubicación conocida en caché (`getLastKnownPositionAsync`) para respuesta instantánea con fallback a `getCurrentPositionAsync({ accuracy: Accuracy.Balanced })` y geocodificación inversa (`reverseGeocodeAsync`).
+  - Mapa interactivo embebido con Leaflet + OpenStreetMap sin recargas del `WebView`: el HTML inicial se memoriza con `useMemo` y los cambios de posición GPS se ejecutan mediante `injectJavaScript` (`window.setCenter`), validando los mensajes recibidos con type guards.
 
-### 1.4. Integración con Contactos del Dispositivo
-- **Ubicación:** `src/hooks/useDeviceContacts.ts`, `src/components/ContactPickerModal.tsx`
-- **Librería:** `expo-contacts/legacy`
+### 2.6. Integración con Contactos del Dispositivo
+- **Ubicación:** `src/hooks/useDeviceContacts.ts`, `src/components/modals/ContactPickerModal.tsx`
+- **Librería:** `expo-contacts`
 - **Características:**
-  - Lectura segura de la libreta de contactos del teléfono, normalizando nombres, teléfonos móviles y direcciones de correo electrónico.
-  - Modal con buscador en tiempo real por nombre, teléfono o iniciales.
-  - Vinculación del contacto seleccionado a la tarea (`Reminder.contact`).
-  - Acceso directo desde la tarjeta del recordatorio para realizar llamadas telefónicas (`tel:`) o redactar correos (`mailto:`).
+  - Lectura y normalización alfabética de contactos (nombre, teléfono, email) con filtro en tiempo real.
+  - Acceso directo a llamadas (`tel:`) desde el chip del contacto en `ReminderCard`.
 
-### 1.5. Sincronización con Calendario Nativo
+### 2.7. Sincronización con Calendario Nativo
 - **Ubicación:** `src/hooks/useDeviceCalendar.ts`
-- **Librería:** `expo-calendar/legacy`
+- **Librería:** `expo-calendar`
 - **Características:**
-  - Sincroniza las tareas agendadas directamente con el calendario predeterminado del sistema (Google Calendar en Android / Apple Calendar en iOS).
-  - Detección automática o aprovisionamiento de un calendario propio ("Mi Agenda App") en caso de no existir un calendario local editable.
-  - Soporte de eventos con fecha, hora, notas y ubicación adjunta.
-  - Almacena el `calendarEventId` para reflejar automáticamente modificaciones o eliminaciones de eventos en el calendario nativo.
-  - Compatible tanto en clientes gestionados (Expo Go) como en builds de desarrollo y producción (*standalone*).
+  - Sincroniza creación, actualización y eliminación de eventos en el calendario editable del dispositivo almacenando `calendarEventId` en el recordatorio.
+  - Al eliminar un recordatorio, la supresión del evento nativo ocurre exclusivamente después de confirmar el diálogo de borrado en `useReminders.confirmAndDelete`.
 
-### 1.6. Estado Global con Zustand
-- **Ubicación:** `src/store/useReminderStore.ts`
-- **Librería:** `zustand` (^5.0.0)
+### 2.8. Notificaciones Locales y Ciclo de Vida
+- **Ubicación:** `src/hooks/useLocalNotifications.ts`, `App.tsx`
+- **Librería:** `expo-notifications`
 - **Características:**
-  - Reemplaza el prop drilling y el uso disperso de `useState` entre componentes y pantallas (`HomeScreen`, `CreateScreen`, `useReminders`).
-  - Manejo unificado de acciones asíncronas:
-    - `loadReminders(username)`: Carga las tareas desde `AsyncStorage` hacia la memoria reactiva.
-    - `addReminder(reminder, username)`: Guarda y actualiza de forma atómica.
-    - `updateReminder(reminder, username)`: Modifica tareas existentes manteniendo sincronizada la caché.
-    - `deleteReminder(id, username)`: Remueve tareas y limpia notificaciones y eventos asociados.
-  - Estado `loading` centralizado para mostrar indicadores visuales consistentes.
+  - Los listeners, categorías interactivas (`✔ Completar tarea`) y handler se inicializan dentro del ciclo de vida de React mediante `setupNotificationListeners()` en `App.tsx`, limpiando las suscripciones al desmontar.
+  - Actualización automática del contador de badge según tareas pendientes y tipado estricto en respuestas de notificación.
 
-### 1.7. Suite de Pruebas Automatizadas (Testing)
+### 2.9. Suite de Pruebas Automatizadas (Testing)
 - **Framework:** Jest, `jest-expo`, `@testing-library/react-native`, `@testing-library/jest-native`
-- **Cobertura:** 10 suites de pruebas con **85 tests unitarios** aprobados:
-  1. `authValidation.test.ts`: Validación de credenciales y registros.
-  2. `timeCalculations.test.ts`: Cálculos de lead time y rangos de alerta.
-  3. `CustomButton.test.tsx`: Renderizado y comportamiento de botones interactivos.
-  4. `ReminderCard.test.tsx`: Despliegue de tarjetas, badges de cámara, ubicación, contactos y calendario.
-  5. `useReminderStore.test.ts`: Operaciones CRUD y manejo de estado en Zustand.
-  6. `useReminders.test.ts`: Hook orquestador de recordatorios y notificaciones.
-  7. `useLocation.test.ts`: Solicitud de permisos GPS y geocodificación inversa.
-  8. `useContacts.test.ts`: Consulta de agenda nativa y filtrado de contactos.
-  9. `useCalendar.test.ts`: Creación, actualización y supresión de eventos nativos.
-  10. `useLocalNotifications.test.ts`: Programación de alertas locales, canales Android y badges.
+- **Cobertura:** **11 suites de pruebas** alineadas a la arquitectura final:
+  1. `authValidation.test.ts`: Validaciones de registro y hashing de contraseñas.
+  2. `timeCalculations.test.ts`: Cálculos de *lead time*, fechas ISO y reconstrucción por `targetTimestamp`.
+  3. `CustomButton.test.tsx`: Renderizado e interacción de `components/ui/CustomButton`.
+  4. `ReminderCard.test.tsx`: Renderizado presentacional, chips de ubicación/contacto, badges y delegación de eventos.
+  5. `useAuthStore.test.ts`: Hidratación de sesión, login, registro y logout con limpieza de stores.
+  6. `useReminderStore.test.ts`: CRUD optimizado en Zustand, filtros de fecha y reseteo de estado.
+  7. `useReminders.test.ts`: Orquestación completa (`saveOrUpdateReminder`, `toggleComplete`, `confirmAndDelete` con calendario nativo y notificaciones).
+  8. `useLocation.test.ts`: Permisos GPS y geocodificación inversa.
+  9. `useContacts.test.ts`: Consulta y formateo de contactos nativos.
+  10. `useCalendar.test.ts`: Permisos, selección de calendario y eventos nativos.
+  11. `useLocalNotifications.test.ts`: Canales Android, acciones rápidas, badges y ciclo de vida con `setupNotificationListeners`.
 
 ---
 
-## 2. Stack Tecnológico y Dependencias
+## 3. Stack Tecnológico y Dependencias
 
 | Componente | Paquete / Herramienta | Versión |
 | :--- | :--- | :--- |
 | **Framework Base** | Expo SDK | ^58.0.0 |
 | **Núcleo Móvil** | React Native | 0.88.1 |
 | **Librería React** | React | 19.3.0 |
-| **Lenguaje** | TypeScript | ~6.0.3 |
+| **Lenguaje** | TypeScript (`strict: true`) | ~6.0.3 |
 | **Navegación** | React Navigation (Native Stack) | ^7.20.0 |
 | **Gestión de Estado** | Zustand | ^5.0.16 |
 | **Persistencia Local** | @react-native-async-storage/async-storage | 2.2.0 |
@@ -127,98 +186,48 @@ La aplicación ha evolucionado desde una libreta de notas simple hacia un gestor
 
 ---
 
-## 3. Instalación y Ejecución
+## 4. Instalación y Ejecución
 
-### 3.1. Requisitos Previos
-- **Node.js:** Versión 18 o 20 LTS instalada en el sistema.
-- **npm:** Gestor de paquetes incluido con Node.js.
+### 4.1. Requisitos Previos
+- **Node.js:** Versión 18 o 20 LTS.
 - **Dispositivo físico o emulador:**
-  - Dispositivo físico Android o iOS con la app **Expo Go** instalada.
-  - O emulador Android Studio / simulador de iOS debidamente configurado.
+  - Dispositivo físico Android o iOS con **Expo Go** o Development Build (`npx expo run:android` / `npx expo run:ios` para calendario nativo completo).
 
-### 3.2. Instalación de Dependencias
-Clone el repositorio y acceda a la carpeta del proyecto en su terminal:
-
+### 4.2. Instalación de Dependencias
 ```bash
 git clone <URL_DEL_REPOSITORIO>
 cd MiAgendaApp
-```
-
-Instale las dependencias del proyecto ejecutando:
-
-```bash
 npm install --legacy-peer-deps
 ```
 
-> **Nota:** Se utiliza `--legacy-peer-deps` para garantizar compatibilidad estricta con las versiones más recientes de React 19 y las herramientas de testing en Expo SDK 58.
-
-### 3.3. Iniciar la Aplicación
-
-Inicie el servidor de desarrollo de Metro/Expo:
-
+### 4.3. Iniciar la Aplicación
 ```bash
 npx expo start
 ```
-o mediante el script configurado:
+o mediante npm:
 ```bash
 npm start
 ```
 
-**Para probar la aplicación:**
-- **Dispositivo físico (Recomendado para cámara, contactos y GPS):** Abra la app Expo Go en su teléfono y escanee el código QR que se imprime en la consola.
-- **Emulador de Android:** Presione la tecla `a` en la terminal donde corre Expo.
-- **Simulador de iOS (macOS):** Presione la tecla `i` en la terminal.
+### 4.4. Verificación de Tipos y Pruebas Unitarias
+Verificar tipado estricto de TypeScript:
+```bash
+npx tsc --noEmit
+```
 
-### 3.4. Ejecutar las Pruebas Unitarias
-
-Para ejecutar la suite completa de pruebas automatizadas con Jest:
-
+Ejecutar la suite completa de pruebas unitarias:
 ```bash
 npm test
 ```
 
-Para ejecutar las pruebas en modo detallado (*verbose*):
-
+Ejecutar una suite específica:
 ```bash
-npm test -- --verbose
-```
-
-Para ejecutar una suite de pruebas específica (por ejemplo, el store de Zustand o el calendario):
-
-```bash
-npm test useReminderStore.test.ts
-npm test useCalendar.test.ts
+npm test useAuthStore.test.ts
+npm test useReminders.test.ts
 ```
 
 ---
 
-## 4. Documentación de Prompts Utilizados
-
-A continuación se detallan los prompts de ingeniería utilizados para orientar y guiar la implementación asistida de las nuevas capacidades del sistema:
-
-### Prompt 1: Ampliación de Tipos y Modelo de Datos
-> *"Actualizar `src/types.ts` para que la entidad `Reminder` soporte campos de hardware: foto adjunta (`imageUri?: string | null`), ubicación geográfica (`location?: ReminderLocation` con latitud, longitud y dirección textual opcional), contacto asociado (`contact?: ReminderContact` con nombre, teléfono y email) e identificador de sincronización con calendario nativo (`calendarEventId?: string`). Mantener tipado estricto con TypeScript."*
-
-### Prompt 2: Migración de Estado a Zustand
-> *"Migrar la gestión de recordatorios a Zustand creando `src/store/useReminderStore.ts`. El store debe contener `reminders: Reminder[]`, `loading: boolean` y las funciones asíncronas `loadReminders`, `addReminder`, `updateReminder` y `deleteReminder`, sincronizadas con `AsyncStorage`. Refactorizar las pantallas `HomeScreen`, `CreateScreen` y el hook `useReminders` para consumir el store, eliminando el prop drilling."*
-
-### Prompt 3: Manejo Seguro de Permisos Multiplataforma
-> *"Crear una utilidad `requestPermissionSafely` en `src/utils/permissionHelpers.ts` que reciba una función de solicitud y una función de consulta de permisos. Debe escuchar cambios en `AppState` para evitar el bug de Android donde tocar fuera del diálogo del sistema descarta el cuadro sin resolver la promesa. Si el permiso es denegado permanentemente (`canAskAgain: false`), ofrecer un botón para abrir la configuración del sistema con `Linking.openSettings()`."*
-
-### Prompt 4: Integración de Sensores y Hardware (Cámara, GPS, Contactos, Calendario)
-> *"Desarrollar hooks modulares reutilizables utilizando las librerías de Expo:
-> 1. `useCamera`: tomar fotos con `launchCameraAsync` y elegir de galería con `launchImageLibraryAsync`.
-> 2. `useLocation`: obtener coordenadas GPS y convertir a dirección legible mediante geocodificación inversa. Añadir modal con mapa interactivo en WebView.
-> 3. `useDeviceContacts`: consultar la agenda nativa y desplegar modal con barra de búsqueda para asociar un contacto.
-> 4. `useDeviceCalendar`: sincronizar tareas con el calendario nativo del teléfono, creando el evento con fecha y hora y guardando el `calendarEventId`."*
-
-### Prompt 5: Pruebas Unitarias Automatizadas con Mocks Nativos
-> *"Diseñar una suite de pruebas completa en `src/__tests__/` usando Jest y React Native Testing Library. Mockear los módulos nativos (`expo-location`, `expo-contacts`, `expo-calendar`, `expo-image-picker`, `expo-notifications` y `AsyncStorage`). Verificar estados de permisos (concedido, denegado, bloqueado), llamadas a APIs nativas y operaciones sobre el store de Zustand."*
-
----
-
-## 5. Demostracion de video
-
-Puede acceder al video con la demostración de la aplicación en funcionamiento en el siguiente enlace:
+## 5. Demostración en Video
 
 - **Link del video:** [Ver Video en Google Drive](https://drive.google.com/file/d/1EgHf4M5Eu4Z5BwpAjh9GvGz3TfM9AnkE/view?usp=drive_link)

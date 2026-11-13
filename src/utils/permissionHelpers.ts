@@ -1,4 +1,11 @@
-import { AppState } from "react-native";
+import { Alert, AppState, Linking } from "react-native";
+
+export interface PermissionAlertMessages {
+  blockedTitle: string;
+  blockedMessage: string;
+  deniedTitle?: string;
+  deniedMessage?: string;
+}
 
 /**
  * Ejecuta una solicitud de permisos nativos protegiendo contra el comportamiento
@@ -51,4 +58,21 @@ export async function requestPermissionSafely<T>(
         }
       });
   });
+}
+
+/**
+ * Muestra la alerta apropiada cuando un permiso es denegado o bloqueado permanentemente.
+ */
+export function showPermissionAlert(
+  canAskAgain: boolean | undefined,
+  messages: PermissionAlertMessages,
+): void {
+  if (canAskAgain === false) {
+    Alert.alert(messages.blockedTitle, messages.blockedMessage, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
+    ]);
+  } else if (messages.deniedTitle && messages.deniedMessage) {
+    Alert.alert(messages.deniedTitle, messages.deniedMessage);
+  }
 }

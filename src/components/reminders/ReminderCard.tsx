@@ -1,11 +1,17 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Linking,
+  Platform,
+} from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
-import { Reminder, ReminderLocation, ReminderContact } from "../types";
-import { CATEGORIAS } from "../constants/categories";
-import { COLORS, RADIUS } from "../constants/theme";
+import { Reminder, ReminderLocation, ReminderContact } from "../../types";
+import { CATEGORIAS } from "../../constants/categories";
+import { COLORS, RADIUS } from "../../constants/theme";
 import ImagePreviewModal from "./ImagePreviewModal";
-import { useDeviceCalendar } from "../hooks/useDeviceCalendar";
 
 interface Props {
   reminder: Reminder;
@@ -22,18 +28,6 @@ export default function ReminderCard({
 }: Props) {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const categoryConfig = CATEGORIAS[reminder.category] || CATEGORIAS.personal;
-  const { eliminarEventoCalendario } = useDeviceCalendar();
-
-  const handleDelete = async () => {
-    if (reminder.calendarEventId) {
-      try {
-        await eliminarEventoCalendario(reminder.calendarEventId);
-      } catch (err) {
-        console.warn("[ReminderCard] Error al remover evento del calendario:", err);
-      }
-    }
-    onDelete(reminder.id);
-  };
 
   const handleOpenMap = (location: ReminderLocation, title: string) => {
     const lat = location.latitude;
@@ -209,7 +203,7 @@ export default function ReminderCard({
             {(reminder.notificationId ||
               (reminder.leadTimeSeconds !== undefined &&
                 reminder.leadTimeSeconds !== null)) &&
-              !reminder.completed ? (
+            !reminder.completed ? (
               <>
                 <Text style={styles.dotSeparator}>•</Text>
                 <Feather
@@ -236,7 +230,7 @@ export default function ReminderCard({
             ) : null}
 
             <TouchableOpacity
-              onPress={handleDelete}
+              onPress={() => onDelete(reminder.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
               accessibilityLabel="Eliminar recordatorio"
@@ -426,3 +420,4 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
+

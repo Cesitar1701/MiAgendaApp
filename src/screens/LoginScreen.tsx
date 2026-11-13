@@ -11,10 +11,10 @@ import {
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types";
-import { validarLogin } from "../services/authStorage";
-import AuthBrandHeader from "../components/AuthBrandHeader";
-import CustomInput from "../components/CustomInput";
-import CustomButton from "../components/CustomButton";
+import { useAuthStore } from "../store/useAuthStore";
+import AuthBrandHeader from "../components/auth/AuthBrandHeader";
+import CustomInput from "../components/ui/CustomInput";
+import CustomButton from "../components/ui/CustomButton";
 import { COLORS, RADIUS } from "../constants/theme";
 
 type Props = {
@@ -24,6 +24,8 @@ type Props = {
 export default function LoginScreen({ navigation }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const login = useAuthStore((state) => state.login);
+  const loading = useAuthStore((state) => state.loading);
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -31,10 +33,8 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
-    const isValid = await validarLogin({ username: username.trim(), password });
-    if (isValid) {
-      navigation.replace("Home", { username: username.trim() });
-    } else {
+    const isValid = await login({ username: username.trim(), password });
+    if (!isValid) {
       Alert.alert("Acceso Denegado", "Usuario o contraseña incorrectos.");
     }
   };
@@ -76,9 +76,10 @@ export default function LoginScreen({ navigation }: Props) {
           />
 
           <CustomButton
-            title="Iniciar sesión"
+            title={loading ? "Ingresando..." : "Iniciar sesión"}
             rightIcon="chevron-right"
             onPress={handleLogin}
+            disabled={loading}
             style={styles.submitButton}
           />
 

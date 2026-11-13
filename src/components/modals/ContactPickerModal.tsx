@@ -13,8 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { ReminderContact } from "../types";
-import { COLORS, RADIUS } from "../constants/theme";
+import { ReminderContact } from "../../types";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 interface Props {
   visible: boolean;
@@ -146,7 +146,11 @@ export default function ContactPickerModal({
                   onPress={() => setSearchQuery("")}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Feather name="x-circle" size={16} color={COLORS.textPlaceholder} />
+                  <Feather
+                    name="x-circle"
+                    size={16}
+                    color={COLORS.textPlaceholder}
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -161,7 +165,9 @@ export default function ContactPickerModal({
               <View style={styles.centerContainer}>
                 <Feather name="user-x" size={42} color={COLORS.iconMuted} />
                 <Text style={styles.emptyTitle}>
-                  {searchQuery ? "Sin resultados" : "No hay contactos disponibles"}
+                  {searchQuery
+                    ? "Sin resultados"
+                    : "No hay contactos disponibles"}
                 </Text>
                 <Text style={styles.emptySubtitle}>
                   {searchQuery
@@ -320,3 +326,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
+

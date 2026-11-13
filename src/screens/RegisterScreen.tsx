@@ -11,10 +11,11 @@ import {
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types";
-import { registrarUsuario, validarRegistro } from "../services/authStorage";
-import AuthBrandHeader from "../components/AuthBrandHeader";
-import CustomInput from "../components/CustomInput";
-import CustomButton from "../components/CustomButton";
+import { validarRegistro } from "../services/authStorage";
+import { useAuthStore } from "../store/useAuthStore";
+import AuthBrandHeader from "../components/auth/AuthBrandHeader";
+import CustomInput from "../components/ui/CustomInput";
+import CustomButton from "../components/ui/CustomButton";
 import { COLORS, RADIUS } from "../constants/theme";
 
 type Props = {
@@ -25,6 +26,8 @@ export default function RegisterScreen({ navigation }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const register = useAuthStore((state) => state.register);
+  const loading = useAuthStore((state) => state.loading);
 
   const handleRegister = async () => {
     const validacion = validarRegistro(username, password, confirmPassword);
@@ -44,7 +47,7 @@ export default function RegisterScreen({ navigation }: Props) {
       return;
     }
 
-    const result = await registrarUsuario({
+    const result = await register({
       username: username.trim(),
       password,
     });
@@ -106,9 +109,10 @@ export default function RegisterScreen({ navigation }: Props) {
           />
 
           <CustomButton
-            title="Registrarme"
+            title={loading ? "Registrando..." : "Registrarme"}
             rightIcon="chevron-right"
             onPress={handleRegister}
+            disabled={loading}
             style={styles.submitButton}
           />
 

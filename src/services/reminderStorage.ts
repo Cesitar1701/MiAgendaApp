@@ -4,10 +4,25 @@ import { obtenerSesionActiva } from "./authStorage";
 
 const REMINDERS_KEY = "@reminders_list";
 
+const isReminderRecord = (value: unknown): value is Reminder => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.isoDate === "string" &&
+    typeof candidate.targetTimestamp === "number" &&
+    typeof candidate.completed === "boolean"
+  );
+};
+
 const getAllRemindersRaw = async (): Promise<Reminder[]> => {
   try {
     const json = await AsyncStorage.getItem(REMINDERS_KEY);
-    return json ? JSON.parse(json) : [];
+    if (!json) return [];
+    const parsed: unknown = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isReminderRecord);
   } catch (error) {
     console.error("Error al leer recordatorios:", error);
     return [];
@@ -19,7 +34,10 @@ const resolveUsername = async (username?: string): Promise<string | null> => {
   return await obtenerSesionActiva();
 };
 
-const belongsToUser = (reminder: Reminder, activeUser: string | null): boolean => {
+const belongsToUser = (
+  reminder: Reminder,
+  activeUser: string | null,
+): boolean => {
   if (!activeUser) return true;
   if (!reminder.username) return false;
   return reminder.username.toLowerCase() === activeUser.toLowerCase();
@@ -30,17 +48,14 @@ const sortReminders = (list: Reminder[]): Reminder[] => {
     if (a.completed !== b.completed) {
       return a.completed ? 1 : -1;
     }
-    if (a.targetTimestamp && b.targetTimestamp) {
-      return a.targetTimestamp - b.targetTimestamp;
-    }
-    return 0;
+    return a.targetTimestamp - b.targetTimestamp;
   });
 };
 
 export const saveReminder = async (
   newReminder: Reminder,
   username?: string,
-): Promise<boolean> => {
+): Promise<Reminder[] | null> => {
   try {
     const activeUser = await resolveUsername(username ?? newReminder.username);
     const current = await getAllRemindersRaw();
@@ -48,25 +63,27 @@ export const saveReminder = async (
       ...newReminder,
       username: activeUser ?? newReminder.username,
     };
-    const updated = [reminderWithUser, ...current];
-    await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(updated));
-    return true;
+    const updatedAll = [reminderWithUser, ...current];
+    await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(updatedAll));
+    return sortReminders(
+      updatedAll.filter((r) => belongsToUser(r, activeUser)),
+    );
   } catch (error) {
     console.error("Error al guardar recordatorio:", error);
-    return false;
+    return null;
   }
 };
 
 export const updateReminder = async (
   updatedReminder: Reminder,
   username?: string,
-): Promise<boolean> => {
+): Promise<Reminder[] | null> => {
   try {
     const activeUser = await resolveUsername(
       username ?? updatedReminder.username,
     );
     const current = await getAllRemindersRaw();
-    const updated = current.map((r) =>
+    const updatedAll = current.map((r) =>
       r.id === updatedReminder.id
         ? {
             ...updatedReminder,
@@ -74,11 +91,13 @@ export const updateReminder = async (
           }
         : r,
     );
-    await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(updated));
-    return true;
+    await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(updatedAll));
+    return sortReminders(
+      updatedAll.filter((r) => belongsToUser(r, activeUser)),
+    );
   } catch (error) {
     console.error("Error al actualizar recordatorio:", error);
-    return false;
+    return null;
   }
 };
 
@@ -95,38 +114,6 @@ export const getStoredReminders = async (
   } catch (error) {
     console.error("Error al obtener recordatorios:", error);
     return [];
-  }
-};
-
-export const updateReminderStatus = async (
-  id: string,
-  username?: string,
-  newNotificationId?: string | null,
-): Promise<Reminder[]> => {
-  try {
-    const activeUser = await resolveUsername(username);
-    const allReminders = await getAllRemindersRaw();
-    const updatedAll = allReminders.map((r) => {
-      if (r.id !== id) return r;
-      const nextCompleted = !r.completed;
-      return {
-        ...r,
-        completed: nextCompleted,
-        notificationId:
-          newNotificationId !== undefined
-            ? newNotificationId
-            : nextCompleted
-              ? null
-              : r.notificationId,
-      };
-    });
-    await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(updatedAll));
-    return sortReminders(
-      updatedAll.filter((r) => belongsToUser(r, activeUser)),
-    );
-  } catch (error) {
-    console.error("Error al actualizar el estado del recordatorio:", error);
-    return await getStoredReminders(username);
   }
 };
 

@@ -34,26 +34,9 @@ export const isSameDay = (dateA: Date, dateB: Date): boolean => {
   return toISODateString(dateA) === toISODateString(dateB);
 };
 
-const SPANISH_MONTHS: Record<string, string> = {
-  ene: "01",
-  feb: "02",
-  mar: "03",
-  abr: "04",
-  may: "05",
-  jun: "06",
-  jul: "07",
-  ago: "08",
-  sep: "09",
-  set: "09",
-  oct: "10",
-  nov: "11",
-  dic: "12",
-};
-
 export const resolveReminderIsoDate = (reminder: {
   isoDate?: string;
   targetTimestamp?: number;
-  date: string;
 }): string | null => {
   if (reminder.isoDate && /^\d{4}-\d{2}-\d{2}$/.test(reminder.isoDate)) {
     return reminder.isoDate;
@@ -64,34 +47,6 @@ export const resolveReminderIsoDate = (reminder: {
   ) {
     return toISODateString(new Date(reminder.targetTimestamp));
   }
-  if (!reminder.date) return null;
-
-  const clean = reminder.date
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/\bde\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // Formato "16 oct 2026"
-  const textMatch = clean.match(/^(\d{1,2})\s+([a-záéíóú]{3,})\s+(\d{4})$/);
-  if (textMatch) {
-    const day = textMatch[1].padStart(2, "0");
-    const monthPrefix = textMatch[2].slice(0, 3);
-    const month = SPANISH_MONTHS[monthPrefix];
-    const year = textMatch[3];
-    if (month) return `${year}-${month}-${day}`;
-  }
-
-  // Formato "16/10/2026"
-  const slashMatch = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    const day = slashMatch[1].padStart(2, "0");
-    const month = slashMatch[2].padStart(2, "0");
-    const year = slashMatch[3];
-    return `${year}-${month}-${day}`;
-  }
-
   return null;
 };
 
@@ -99,7 +54,6 @@ export const isTodayOrFutureReminder = (
   reminder: {
     isoDate?: string;
     targetTimestamp?: number;
-    date: string;
   },
   referenceDate: Date = new Date(),
 ): boolean => {
@@ -171,8 +125,7 @@ export const formatLeadTimeLabel = (seconds: number): string => {
 export const reconstructReminderDate = (reminder: {
   targetTimestamp?: number;
   isoDate?: string;
-  date: string;
-  time: string;
+  time?: string;
 }): Date => {
   if (
     typeof reminder.targetTimestamp === "number" &&
