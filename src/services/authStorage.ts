@@ -8,6 +8,15 @@ export interface User {
   password: string;
 }
 
+const isUserRecord = (value: unknown): value is User => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.username === "string" &&
+    typeof candidate.password === "string"
+  );
+};
+
 // Función determinística de hash para evitar guardar contraseñas en texto plano
 export const hashPassword = (password: string): string => {
   let hash = 5381;
@@ -37,7 +46,10 @@ export const validarRegistro = (
 export const getUsuariosRegistrados = async (): Promise<User[]> => {
   try {
     const data = await AsyncStorage.getItem(USER_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    const parsed: unknown = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isUserRecord);
   } catch (error) {
     console.error("Error al obtener los usuarios registrados:", error);
     return [];
@@ -63,12 +75,12 @@ export const registrarUsuario = async (
     });
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(usuarios));
     return { success: true, message: "Usuario registrado exitosamente" };
-  } catch (error) {
+  } catch {
     return { success: false, message: "Error al registrar el usuario" };
   }
 };
 
-// Validar login (compatible con contraseñas hasheadas y previas en texto plano)
+// Validar login únicamente contra contraseñas hasheadas
 export const validarLogin = async (credenciales: User): Promise<boolean> => {
   try {
     const usuarios = await getUsuariosRegistrados();
@@ -77,7 +89,7 @@ export const validarLogin = async (credenciales: User): Promise<boolean> => {
       (u) =>
         u.username.toLowerCase() ===
           credenciales.username.trim().toLowerCase() &&
-        (u.password === hashedInput || u.password === credenciales.password),
+        u.password === hashedInput,
     );
     if (validarUsuario) {
       await AsyncStorage.setItem(
@@ -98,8 +110,15 @@ export const obtenerSesionActiva = async (): Promise<string | null> => {
   try {
     const raw = await AsyncStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.username === "string" ? parsed.username : null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as Record<string, unknown>).username === "string"
+    ) {
+      return (parsed as { username: string }).username;
+    }
+    return null;
   } catch (error) {
     console.error("Error al obtener la sesión activa:", error);
     return null;

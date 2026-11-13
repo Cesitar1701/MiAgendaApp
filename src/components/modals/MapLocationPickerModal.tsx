@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Modal,
   View,
@@ -9,11 +9,11 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView, WebViewMessageEvent, WebViewProps } from "react-native-webview";
+import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { Feather } from "@expo/vector-icons";
-import { ReminderLocation } from "../types";
-import { useLocation } from "../hooks/useLocation";
-import { COLORS, RADIUS } from "../constants/theme";
+import { ReminderLocation } from "../../types";
+import { useLocation } from "../../hooks/useLocation";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 interface Props {
   visible: boolean;
@@ -22,134 +22,37 @@ interface Props {
   onConfirm: (location: ReminderLocation) => void;
 }
 
-const DEFAULT_LATITUDE = -0;
-const DEFAULT_LONGITUDE = -0;
+interface Coords {
+  latitude: number;
+  longitude: number;
+}
 
-export default function MapLocationPickerModal({
-  visible,
-  initialLocation,
-  onClose,
-  onConfirm,
-}: Props) {
-  const { obtenerUbicacionActual, obtenerDireccionDeCoordenadas, loading: gpsLoading } =
-    useLocation();
+interface LocationSelectedMessage {
+  type: "locationSelected";
+  latitude: number;
+  longitude: number;
+}
 
-  const [initializingGPS, setInitializingGPS] = useState<boolean>(false);
-  const [currentCoords, setCurrentCoords] = useState<{
-    latitude: number;
-    longitude: number;
-  }>({
-    latitude: initialLocation?.latitude ?? DEFAULT_LATITUDE,
-    longitude: initialLocation?.longitude ?? DEFAULT_LONGITUDE,
-  });
+const DEFAULT_COORDS: Coords = {
+  latitude: -34.6037,
+  longitude: -58.3816,
+};
 
-  const [address, setAddress] = useState<string>(
-    initialLocation?.address ?? "Cargando dirección...",
+const isLocationSelectedMessage = (
+  value: unknown,
+): value is LocationSelectedMessage => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "locationSelected" &&
+    typeof candidate.latitude === "number" &&
+    typeof candidate.longitude === "number" &&
+    !Number.isNaN(candidate.latitude) &&
+    !Number.isNaN(candidate.longitude)
   );
-  const [resolvingAddress, setResolvingAddress] = useState<boolean>(false);
-  const webViewRef = useRef<WebView<{}>>(null);
-  const geocodeRequestIdRef = useRef<number>(0);
+};
 
-  // Sincronizar coordenadas al abrir el modal
-  useEffect(() => {
-    if (visible) {
-      if (initialLocation) {
-        const lat = initialLocation.latitude;
-        const lon = initialLocation.longitude;
-        setCurrentCoords({ latitude: lat, longitude: lon });
-        if (initialLocation.address) {
-          setAddress(initialLocation.address);
-        } else {
-          handleResolveAddress(lat, lon);
-        }
-      } else {
-        // 2. Si es nuevo, pedir automáticamente el GPS actual del teléfono
-        setInitializingGPS(true);
-        obtenerUbicacionActual().then((loc) => {
-          if (loc) {
-            setCurrentCoords({ latitude: loc.latitude, longitude: loc.longitude });
-            setAddress(loc.address || "Ubicación actual detectada");
-          } else {
-            // Si el GPS falla o fue denegado, usar fallback
-            setCurrentCoords({ latitude: DEFAULT_LATITUDE, longitude: DEFAULT_LONGITUDE });
-            handleResolveAddress(DEFAULT_LATITUDE, DEFAULT_LONGITUDE);
-          }
-          setInitializingGPS(false);
-        });
-      }
-    }
-  }, [visible, initialLocation]);
-
-  const handleResolveAddress = useCallback(
-    async (latitude: number, longitude: number) => {
-      const requestId = ++geocodeRequestIdRef.current;
-      setResolvingAddress(true);
-      try {
-        const addr = await obtenerDireccionDeCoordenadas({
-          latitude,
-          longitude,
-        });
-        if (requestId === geocodeRequestIdRef.current) {
-          setAddress(addr);
-        }
-      } catch {
-        if (requestId === geocodeRequestIdRef.current) {
-          setAddress(
-            `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`,
-          );
-        }
-      } finally {
-        if (requestId === geocodeRequestIdRef.current) {
-          setResolvingAddress(false);
-        }
-      }
-    },
-    [obtenerDireccionDeCoordenadas],
-  );
-
-  const handleMessage = (event: WebViewMessageEvent) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === "locationSelected") {
-        const lat = Number(data.latitude);
-        const lon = Number(data.longitude);
-        setCurrentCoords({ latitude: lat, longitude: lon });
-        handleResolveAddress(lat, lon);
-      }
-    } catch (err) {
-      console.warn("[MapLocationPickerModal] Error procesando mensaje de WebView:", err);
-    }
-  };
-
-  const handleCenterOnGPS = async () => {
-    // 1. Pedir ubicación
-    const loc = await obtenerUbicacionActual();
-    if (loc) {
-      // 2. Mover el mapa inmediatamente con flyTo
-      const jsCode = `if (window.setCenter) { window.setCenter(${loc.latitude}, ${loc.longitude}); } true;`;
-      webViewRef.current?.injectJavaScript(jsCode);
-      // 3. Actualizar estado
-      setCurrentCoords({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-      });
-      setAddress(loc.address ?? `Lat: ${loc.latitude.toFixed(4)}, Lon: ${loc.longitude.toFixed(4)}`);
-    }
-  };
-
-  const handleConfirm = () => {
-    onConfirm({
-      latitude: currentCoords.latitude,
-      longitude: currentCoords.longitude,
-      address,
-    });
-    onClose();
-  };
-
-  const initialLat = currentCoords.latitude;
-  const initialLon = currentCoords.longitude;
-
-  const leafletHtml = `
+const buildLeafletHtml = (initialLat: number, initialLon: number): string => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -232,7 +135,159 @@ export default function MapLocationPickerModal({
   </script>
 </body>
 </html>
-  `;
+`;
+
+export default function MapLocationPickerModal({
+  visible,
+  initialLocation,
+  onClose,
+  onConfirm,
+}: Props) {
+  const {
+    obtenerUbicacionActual,
+    obtenerDireccionDeCoordenadas,
+    loading: gpsLoading,
+  } = useLocation();
+
+  const [mapInitialCoords, setMapInitialCoords] = useState<Coords>({
+    latitude: initialLocation?.latitude ?? DEFAULT_COORDS.latitude,
+    longitude: initialLocation?.longitude ?? DEFAULT_COORDS.longitude,
+  });
+
+  const [currentCoords, setCurrentCoords] = useState<Coords>({
+    latitude: initialLocation?.latitude ?? DEFAULT_COORDS.latitude,
+    longitude: initialLocation?.longitude ?? DEFAULT_COORDS.longitude,
+  });
+
+  const [address, setAddress] = useState<string>(
+    initialLocation?.address ?? "Cargando dirección...",
+  );
+  const [resolvingAddress, setResolvingAddress] = useState<boolean>(false);
+  const webViewRef = useRef<WebView<{}>>(null);
+  const geocodeRequestIdRef = useRef<number>(0);
+
+  const moveMapCenter = useCallback((latitude: number, longitude: number) => {
+    const jsCode = `if (window.setCenter) { window.setCenter(${latitude}, ${longitude}); } true;`;
+    webViewRef.current?.injectJavaScript(jsCode);
+  }, []);
+
+  const handleResolveAddress = useCallback(
+    async (latitude: number, longitude: number) => {
+      const requestId = ++geocodeRequestIdRef.current;
+      setResolvingAddress(true);
+      try {
+        const addr = await obtenerDireccionDeCoordenadas({
+          latitude,
+          longitude,
+        });
+        if (requestId === geocodeRequestIdRef.current) {
+          setAddress(addr);
+        }
+      } catch {
+        if (requestId === geocodeRequestIdRef.current) {
+          setAddress(
+            `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`,
+          );
+        }
+      } finally {
+        if (requestId === geocodeRequestIdRef.current) {
+          setResolvingAddress(false);
+        }
+      }
+    },
+    [obtenerDireccionDeCoordenadas],
+  );
+
+  // Sincronizar coordenadas solo al abrir el modal sin recargar WebView tras cada toque
+  useEffect(() => {
+    if (!visible) return;
+
+    if (initialLocation) {
+      const coords = {
+        latitude: initialLocation.latitude,
+        longitude: initialLocation.longitude,
+      };
+      setMapInitialCoords(coords);
+      setCurrentCoords(coords);
+      if (initialLocation.address) {
+        setAddress(initialLocation.address);
+      } else {
+        void handleResolveAddress(coords.latitude, coords.longitude);
+      }
+    } else {
+      setMapInitialCoords(DEFAULT_COORDS);
+      setCurrentCoords(DEFAULT_COORDS);
+      void obtenerUbicacionActual().then((loc) => {
+        if (loc) {
+          setCurrentCoords({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+          });
+          setAddress(loc.address || "Ubicación actual detectada");
+          moveMapCenter(loc.latitude, loc.longitude);
+        } else {
+          void handleResolveAddress(
+            DEFAULT_COORDS.latitude,
+            DEFAULT_COORDS.longitude,
+          );
+        }
+      });
+    }
+  }, [
+    visible,
+    initialLocation,
+    handleResolveAddress,
+    obtenerUbicacionActual,
+    moveMapCenter,
+  ]);
+
+  const handleMessage = (event: WebViewMessageEvent) => {
+    try {
+      const parsed: unknown = JSON.parse(event.nativeEvent.data);
+      if (isLocationSelectedMessage(parsed)) {
+        setCurrentCoords({
+          latitude: parsed.latitude,
+          longitude: parsed.longitude,
+        });
+        void handleResolveAddress(parsed.latitude, parsed.longitude);
+      }
+    } catch (err) {
+      console.warn(
+        "[MapLocationPickerModal] Error procesando mensaje de WebView:",
+        err,
+      );
+    }
+  };
+
+  const handleCenterOnGPS = async () => {
+    const loc = await obtenerUbicacionActual();
+    if (loc) {
+      moveMapCenter(loc.latitude, loc.longitude);
+      setCurrentCoords({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      });
+      setAddress(
+        loc.address ??
+          `Lat: ${loc.latitude.toFixed(4)}, Lon: ${loc.longitude.toFixed(4)}`,
+      );
+    }
+  };
+
+  const handleConfirm = () => {
+    onConfirm({
+      latitude: currentCoords.latitude,
+      longitude: currentCoords.longitude,
+      address,
+    });
+    onClose();
+  };
+
+  const leafletHtml = useMemo(
+    () =>
+      buildLeafletHtml(mapInitialCoords.latitude, mapInitialCoords.longitude),
+    [mapInitialCoords.latitude, mapInitialCoords.longitude],
+  );
 
   return (
     <Modal
@@ -306,7 +361,9 @@ export default function MapLocationPickerModal({
               {resolvingAddress ? (
                 <View style={styles.resolvingRow}>
                   <ActivityIndicator size="small" color={COLORS.primary} />
-                  <Text style={styles.resolvingText}>Resolviendo dirección...</Text>
+                  <Text style={styles.resolvingText}>
+                    Resolviendo dirección...
+                  </Text>
                 </View>
               ) : (
                 <Text style={styles.addressValue} numberOfLines={2}>

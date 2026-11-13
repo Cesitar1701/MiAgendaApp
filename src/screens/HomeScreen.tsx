@@ -1,27 +1,22 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Platform,
-  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons, Feather } from "@expo/vector-icons";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-} from "@react-native-community/datetimepicker";
 
 import { RootStackParamList } from "../types";
-import ReminderCard from "../components/ReminderCard";
-import { cerrarSesion } from "../services/authStorage";
+import { useAuthStore } from "../store/useAuthStore";
+import { useReminderStore } from "../store/useReminderStore";
+import ReminderCard from "../components/reminders/ReminderCard";
+import DateTimeField from "../components/ui/DateTimeField";
 import {
   toISODateString,
-  formatDisplayDate,
   getFormattedCurrentDate,
   isSameDay,
   resolveReminderIsoDate,
@@ -32,30 +27,29 @@ import { COLORS, RADIUS } from "../constants/theme";
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Home">;
-  route: RouteProp<RootStackParamList, "Home">;
 };
 
-export default function HomeScreen({ navigation, route }: Props) {
-  const { username } = route.params || { username: "Usuario" };
+export default function HomeScreen({ navigation }: Props) {
+  const user = useAuthStore((state) => state.user) ?? "Usuario";
+  const logout = useAuthStore((state) => state.logout);
+
+  const selectedDate = useReminderStore((state) => state.selectedDate);
+  const isFilterActive = useReminderStore((state) => state.isFilterActive);
+  const setSelectedDate = useReminderStore((state) => state.setSelectedDate);
+  const setIsFilterActive = useReminderStore(
+    (state) => state.setIsFilterActive,
+  );
+
   const insets = useSafeAreaInsets();
   const {
     reminders,
     toggleComplete,
     confirmAndDelete,
     cancelUserNotifications,
-  } = useReminders(username);
-
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isFilterActive, setIsFilterActive] = useState<boolean>(true);
-  const [showIOSCalendar, setShowIOSCalendar] = useState<boolean>(false);
+  } = useReminders();
 
   const selectedIsoDate = useMemo(
     () => toISODateString(selectedDate),
-    [selectedDate],
-  );
-
-  const formattedFilterDate = useMemo(
-    () => formatDisplayDate(selectedDate),
     [selectedDate],
   );
 
@@ -75,43 +69,19 @@ export default function HomeScreen({ navigation, route }: Props) {
       return reminders.filter((r) => isTodayOrFutureReminder(r, now));
     }
 
-    return reminders.filter((r) => {
-      const reminderIso = resolveReminderIsoDate(r);
-      if (reminderIso) {
-        return reminderIso === selectedIsoDate;
-      }
-      const rDate = r.date.toLowerCase().replace(/\./g, "");
-      const fDate = formattedFilterDate.toLowerCase().replace(/\./g, "");
-      return rDate === fDate;
-    });
-  }, [reminders, isFilterActive, selectedIsoDate, formattedFilterDate]);
+    return reminders.filter(
+      (r) => resolveReminderIsoDate(r) === selectedIsoDate,
+    );
+  }, [reminders, isFilterActive, selectedIsoDate]);
 
   const pendingCount = useMemo(
     () => displayedReminders.filter((r) => !r.completed).length,
     [displayedReminders],
   );
 
-  const handleOpenCalendar = () => {
-    if (Platform.OS === "android") {
-      DateTimePickerAndroid.open({
-        value: selectedDate,
-        mode: "date",
-        onValueChange: (_event, newDate?: Date) => {
-          if (newDate) {
-            setSelectedDate(newDate);
-            setIsFilterActive(true);
-          }
-        },
-      });
-    } else {
-      setShowIOSCalendar(true);
-    }
-  };
-
   const handleLogout = async () => {
     await cancelUserNotifications();
-    await cerrarSesion();
-    navigation.replace("Login");
+    await logout();
   };
 
   return (
@@ -120,7 +90,7 @@ export default function HomeScreen({ navigation, route }: Props) {
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerContent}>
           <View style={styles.topRow}>
-            <Text style={styles.greeting}>Hola, {username}</Text>
+            <Text style={styles.greeting}>Hola, {user}</Text>
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -133,18 +103,29 @@ export default function HomeScreen({ navigation, route }: Props) {
 
           <View style={styles.dateRow}>
             <Text style={styles.dateText}>{headerDateLabel}</Text>
-            <TouchableOpacity
-              style={styles.calendarIconContainer}
-              onPress={handleOpenCalendar}
-              activeOpacity={0.7}
-              accessibilityLabel="Seleccionar fecha en el calendario"
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={24}
-                color={COLORS.surface}
-              />
-            </TouchableOpacity>
+            <DateTimeField
+              value={selectedDate}
+              mode="date"
+              iosDisplay="inline"
+              onChange={(newDate) => {
+                setSelectedDate(newDate);
+                setIsFilterActive(true);
+              }}
+              renderTrigger={(openPicker) => (
+                <TouchableOpacity
+                  style={styles.calendarIconContainer}
+                  onPress={openPicker}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Seleccionar fecha en el calendario"
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={24}
+                    color={COLORS.surface}
+                  />
+                </TouchableOpacity>
+              )}
+            />
           </View>
         </View>
       </View>
@@ -189,7 +170,6 @@ export default function HomeScreen({ navigation, route }: Props) {
               onDelete={confirmAndDelete}
               onPress={(selectedReminder) =>
                 navigation.navigate("Create", {
-                  username,
                   reminder: selectedReminder,
                 })
               }
@@ -215,48 +195,12 @@ export default function HomeScreen({ navigation, route }: Props) {
       {/* Botón Flotante */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate("Create", { username })}
+        onPress={() => navigation.navigate("Create")}
         activeOpacity={0.85}
         accessibilityLabel="Crear nuevo recordatorio"
       >
         <Feather name="plus" size={28} color={COLORS.surface} />
       </TouchableOpacity>
-
-      {/* Modal de Calendario para iOS */}
-      {Platform.OS !== "android" && (
-        <Modal
-          visible={showIOSCalendar}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowIOSCalendar(false)}
-        >
-          <TouchableOpacity
-            style={styles.iosModalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowIOSCalendar(false)}
-          >
-            <View style={styles.iosModalCard}>
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display="inline"
-                onChange={(_event, newDate) => {
-                  if (newDate) {
-                    setSelectedDate(newDate);
-                    setIsFilterActive(true);
-                  }
-                }}
-              />
-              <TouchableOpacity
-                style={styles.iosModalDoneButton}
-                onPress={() => setShowIOSCalendar(false)}
-              >
-                <Text style={styles.iosModalDoneText}>Listo</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      )}
     </View>
   );
 }
@@ -392,31 +336,5 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: COLORS.surface,
-  },
-  iosModalOverlay: {
-    flex: 1,
-    backgroundColor: COLORS.overlayDark,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  iosModalCard: {
-    width: "90%",
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: 16,
-    alignItems: "center",
-  },
-  iosModalDoneButton: {
-    marginTop: 12,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-    borderRadius: RADIUS.md,
-  },
-  iosModalDoneText: {
-    color: COLORS.surface,
-    fontWeight: "700",
-    fontSize: 14,
   },
 });

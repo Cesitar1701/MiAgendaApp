@@ -12,6 +12,7 @@ import {
   sincronizarBadgePendientes,
   marcarRecordatorioCompletadoPorNotificacion,
   handleNotificationResponse,
+  setupNotificationListeners,
 } from "../hooks/useLocalNotifications";
 import { useReminderStore } from "../store/useReminderStore";
 import * as reminderStorage from "../services/reminderStorage";
@@ -168,8 +169,10 @@ describe("useLocalNotifications & Notification UI/UX", () => {
         username: "testuser",
         title: "Pagar recibo",
         description: "Luz y agua",
-        date: "2026-11-12",
+        date: "12 nov 2026",
+        isoDate: "2026-11-12",
         time: "15:00",
+        targetTimestamp: new Date(2026, 10, 12, 15, 0).getTime(),
         category: "urgente",
         completed: false,
         notificationId: "notif-100",
@@ -178,7 +181,9 @@ describe("useLocalNotifications & Notification UI/UX", () => {
       (reminderStorage.getStoredReminders as jest.Mock).mockResolvedValue([
         { ...sampleReminder, completed: true, notificationId: null },
       ]);
-      (reminderStorage.updateReminder as jest.Mock).mockResolvedValue(true);
+      (reminderStorage.updateReminder as jest.Mock).mockResolvedValue([
+        { ...sampleReminder, completed: true, notificationId: null },
+      ]);
 
       useReminderStore.setState({ reminders: [sampleReminder] });
 
@@ -205,15 +210,19 @@ describe("useLocalNotifications & Notification UI/UX", () => {
         username: "testuser",
         title: "Pasear al perro",
         description: "Parque",
-        date: "2026-11-12",
+        date: "12 nov 2026",
+        isoDate: "2026-11-12",
         time: "19:00",
+        targetTimestamp: new Date(2026, 10, 12, 19, 0).getTime(),
         category: "personal",
         completed: false,
         notificationId: "notif-200",
       };
 
       useReminderStore.setState({ reminders: [sampleReminder] });
-      (reminderStorage.updateReminder as jest.Mock).mockResolvedValue(true);
+      (reminderStorage.updateReminder as jest.Mock).mockResolvedValue([
+        { ...sampleReminder, completed: true, notificationId: null },
+      ]);
 
       const fakeResponse = {
         actionIdentifier: ACTION_COMPLETE_REMINDER,
@@ -254,8 +263,10 @@ describe("useLocalNotifications & Notification UI/UX", () => {
           id: "1",
           title: "T1",
           description: "",
-          date: "",
-          time: "",
+          date: "12 nov 2026",
+          isoDate: "2026-11-12",
+          time: "10:00",
+          targetTimestamp: 1000,
           category: "trabajo",
           completed: false,
         },
@@ -263,8 +274,10 @@ describe("useLocalNotifications & Notification UI/UX", () => {
           id: "2",
           title: "T2",
           description: "",
-          date: "",
-          time: "",
+          date: "12 nov 2026",
+          isoDate: "2026-11-12",
+          time: "11:00",
+          targetTimestamp: 2000,
           category: "salud",
           completed: true,
         },
@@ -272,8 +285,10 @@ describe("useLocalNotifications & Notification UI/UX", () => {
           id: "3",
           title: "T3",
           description: "",
-          date: "",
-          time: "",
+          date: "12 nov 2026",
+          isoDate: "2026-11-12",
+          time: "12:00",
+          targetTimestamp: 3000,
           category: "urgente",
           completed: false,
         },
@@ -367,6 +382,28 @@ describe("useLocalNotifications & Notification UI/UX", () => {
       });
       expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith("id-2");
       expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith("id-3");
+    });
+
+    it("setupNotificationListeners registra handler, listeners y limpia suscripciones al desmontar", () => {
+      const removeReceived = jest.fn();
+      const removeResponse = jest.fn();
+      mockAddNotificationReceivedListener.mockReturnValueOnce({
+        remove: removeReceived,
+      });
+      mockAddNotificationResponseReceivedListener.mockReturnValueOnce({
+        remove: removeResponse,
+      });
+
+      const cleanup = setupNotificationListeners();
+
+      expect(mockSetNotificationHandler).toHaveBeenCalled();
+      expect(mockAddNotificationReceivedListener).toHaveBeenCalled();
+      expect(mockAddNotificationResponseReceivedListener).toHaveBeenCalled();
+      expect(mockSetNotificationCategoryAsync).toHaveBeenCalled();
+
+      cleanup();
+      expect(removeReceived).toHaveBeenCalled();
+      expect(removeResponse).toHaveBeenCalled();
     });
   });
 });

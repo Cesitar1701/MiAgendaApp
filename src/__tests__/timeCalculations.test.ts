@@ -31,11 +31,14 @@ describe("Lógica de Negocio: Cálculo de Notificaciones y Fechas", () => {
   test("debe excluir recordatorios de fechas pasadas y permitir actuales o futuras en 'Ver todo'", () => {
     const hoy = new Date(2026, 9, 19, 12, 0); // 19 de octubre de 2026
 
-    const recordatorioPasado = { date: "16 oct. 2026" };
-    const recordatorioHoy = { date: "19 oct. 2026", isoDate: "2026-10-19" };
-    const recordatorioFuturo = { date: "25 oct. 2026", isoDate: "2026-10-25" };
+    const recordatorioPasado = { isoDate: "2026-10-16" };
+    const recordatorioHoy = { isoDate: "2026-10-19" };
+    const recordatorioFuturo = {
+      targetTimestamp: new Date(2026, 9, 25, 10, 0).getTime(),
+    };
 
     expect(resolveReminderIsoDate(recordatorioPasado)).toBe("2026-10-16");
+    expect(resolveReminderIsoDate(recordatorioFuturo)).toBe("2026-10-25");
     expect(isTodayOrFutureReminder(recordatorioPasado, hoy)).toBe(false);
     expect(isTodayOrFutureReminder(recordatorioHoy, hoy)).toBe(true);
     expect(isTodayOrFutureReminder(recordatorioFuturo, hoy)).toBe(true);
@@ -54,14 +57,17 @@ describe("Lógica de Negocio: Cálculo de Notificaciones y Fechas", () => {
     expect(formatLeadTimeLabel(7200)).toBe("2 horas antes");
   });
 
-  test("debe reconstruir un objeto Date a partir de un recordatorio para su edición", () => {
-    const reconstructed = reconstructReminderDate({
-      date: "20 oct. 2026",
+  test("debe reconstruir un objeto Date a partir de isoDate/time o targetTimestamp", () => {
+    const fromIso = reconstructReminderDate({
       isoDate: "2026-10-20",
       time: "18:45",
     });
-    expect(toISODateString(reconstructed)).toBe("2026-10-20");
-    expect(reconstructed.getHours()).toBe(18);
-    expect(reconstructed.getMinutes()).toBe(45);
+    expect(toISODateString(fromIso)).toBe("2026-10-20");
+    expect(fromIso.getHours()).toBe(18);
+    expect(fromIso.getMinutes()).toBe(45);
+
+    const ts = new Date(2026, 10, 15, 9, 30).getTime();
+    const fromTimestamp = reconstructReminderDate({ targetTimestamp: ts });
+    expect(fromTimestamp.getTime()).toBe(ts);
   });
 });

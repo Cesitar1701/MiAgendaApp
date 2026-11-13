@@ -1,9 +1,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { CategoryType } from "../types";
-import { CATEGORIAS } from "../constants/categories";
-import { COLORS, RADIUS } from "../constants/theme";
+import { CategoryType } from "../../types";
+import { CATEGORIAS } from "../../constants/categories";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 interface Props {
   selectedCategory: CategoryType | null;
@@ -113,3 +113,4 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
+

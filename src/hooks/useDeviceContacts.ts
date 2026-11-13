@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef } from "react";
-import { Alert, Linking } from "react-native";
+import { Alert } from "react-native";
 import * as Contacts from "expo-contacts/legacy";
 import { ReminderContact } from "../types";
-import { requestPermissionSafely } from "../utils/permissionHelpers";
+import {
+  requestPermissionSafely,
+  showPermissionAlert,
+} from "../utils/permissionHelpers";
 
 export function useDeviceContacts() {
   const [contacts, setContacts] = useState<ReminderContact[]>([]);
@@ -23,38 +26,31 @@ export function useDeviceContacts() {
       }
 
       const existing = await Contacts.getPermissionsAsync();
-      let finalStatus = existing.status;
       let canAskAgain = existing.canAskAgain;
-      let isGranted = existing.status === Contacts.PermissionStatus.GRANTED || existing.granted;
+      let isGranted =
+        existing.status === Contacts.PermissionStatus.GRANTED ||
+        existing.granted;
 
-      if (!isGranted) {
-        if (existing.canAskAgain !== false) {
-          const requested = await requestPermissionSafely(
-            () => Contacts.requestPermissionsAsync(),
-            () => Contacts.getPermissionsAsync(),
-          );
-          finalStatus = requested.status;
-          canAskAgain = requested.canAskAgain;
-          isGranted = requested.status === Contacts.PermissionStatus.GRANTED || requested.granted;
-        }
+      if (!isGranted && existing.canAskAgain !== false) {
+        const requested = await requestPermissionSafely(
+          () => Contacts.requestPermissionsAsync(),
+          () => Contacts.getPermissionsAsync(),
+        );
+        canAskAgain = requested.canAskAgain;
+        isGranted =
+          requested.status === Contacts.PermissionStatus.GRANTED ||
+          requested.granted;
       }
 
       if (!isGranted) {
-        if (!canAskAgain) {
-          Alert.alert(
-            "Permiso de contactos desactivado",
+        showPermissionAlert(canAskAgain, {
+          blockedTitle: "Permiso de contactos desactivado",
+          blockedMessage:
             "Debes habilitar el acceso a los contactos desde los Ajustes del dispositivo para asociar contactos a tus recordatorios.",
-            [
-              { text: "Cancelar", style: "cancel" },
-              { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
-            ],
-          );
-        } else {
-          Alert.alert(
-            "Permiso denegado",
+          deniedTitle: "Permiso denegado",
+          deniedMessage:
             "No se puede acceder a la agenda sin conceder el permiso correspondiente.",
-          );
-        }
+        });
         return false;
       }
 
@@ -69,7 +65,9 @@ export function useDeviceContacts() {
     }
   }, []);
 
-  const formatearContactos = (rawContacts: Contacts.Contact[]): ReminderContact[] => {
+  const formatearContactos = (
+    rawContacts: Contacts.Contact[],
+  ): ReminderContact[] => {
     const mapeados: ReminderContact[] = [];
 
     for (const c of rawContacts) {
@@ -117,7 +115,10 @@ export function useDeviceContacts() {
       return listaFormateada;
     } catch (error) {
       console.warn("[useDeviceContacts] Error al leer contactos:", error);
-      Alert.alert("Error", "No se pudieron obtener los contactos del dispositivo.");
+      Alert.alert(
+        "Error",
+        "No se pudieron obtener los contactos del dispositivo.",
+      );
       setContacts([]);
       return [];
     } finally {

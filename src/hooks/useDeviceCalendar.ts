@@ -1,10 +1,13 @@
 import { useState, useCallback } from "react";
-import { Alert, Linking, Platform, PermissionsAndroid } from "react-native";
+import { Alert, Platform, PermissionsAndroid } from "react-native";
 import { PermissionStatus } from "expo";
 import * as Calendar from "expo-calendar/legacy";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Reminder, ReminderLocation } from "../types";
-import { requestPermissionSafely } from "../utils/permissionHelpers";
+import {
+  requestPermissionSafely,
+  showPermissionAlert,
+} from "../utils/permissionHelpers";
 import { reconstructReminderDate } from "../utils/dateHelpers";
 
 export interface CalendarPermissionOptions {
@@ -13,6 +16,12 @@ export interface CalendarPermissionOptions {
 
 export interface CalendarActionOptions {
   silent?: boolean;
+}
+
+export interface CalendarPermissionResponse {
+  status?: string;
+  granted?: boolean;
+  canAskAgain?: boolean;
 }
 
 export type CalendarEventInput = Omit<Partial<Reminder>, "location"> & {
@@ -25,6 +34,10 @@ export type CalendarEventInput = Omit<Partial<Reminder>, "location"> & {
 };
 
 const PERMISSION_GRANTED = PermissionStatus.GRANTED;
+
+const isCalendarPermissionGranted = (
+  res: CalendarPermissionResponse,
+): boolean => res.status === PERMISSION_GRANTED || Boolean(res.granted);
 
 /**
  * Detecta si la aplicación se está ejecutando dentro de la app cliente Expo Go.
@@ -84,17 +97,22 @@ export const getDeviceTimeZone = (): string => {
  */
 export const resolveStartDate = (input: CalendarEventInput): Date => {
   if (input.startDate instanceof Date) return input.startDate;
-  if (typeof input.startDate === "number" || typeof input.startDate === "string") {
+  if (
+    typeof input.startDate === "number" ||
+    typeof input.startDate === "string"
+  ) {
     return new Date(input.startDate);
   }
-  if (typeof input.targetTimestamp === "number" && !isNaN(input.targetTimestamp)) {
+  if (
+    typeof input.targetTimestamp === "number" &&
+    !isNaN(input.targetTimestamp)
+  ) {
     return new Date(input.targetTimestamp);
   }
-  if (input.date && input.time) {
+  if (input.isoDate || input.time) {
     return reconstructReminderDate({
-      date: input.date,
-      time: input.time,
       isoDate: input.isoDate,
+      time: input.time,
       targetTimestamp: input.targetTimestamp,
     });
   }
@@ -165,17 +183,9 @@ export function useDeviceCalendar() {
           }
         }
 
-        const getPermissionsFn =
-          Calendar.getCalendarPermissionsAsync ??
-          (Calendar as any).getPermissionsAsync;
-        const requestPermissionsFn =
-          Calendar.requestCalendarPermissionsAsync ??
-          (Calendar as any).requestPermissionsAsync;
-
-        const existing = await getPermissionsFn();
-        let isGranted =
-          existing.status === PERMISSION_GRANTED ||
-          Boolean((existing as any).granted);
+        const existing: CalendarPermissionResponse =
+          await Calendar.getCalendarPermissionsAsync();
+        let isGranted = isCalendarPermissionGranted(existing);
         let canAskAgain = existing.canAskAgain;
 
         if (!isGranted && Platform.OS === "android") {
@@ -186,13 +196,12 @@ export function useDeviceCalendar() {
         }
 
         if (!isGranted && canAskAgain !== false && !silent) {
-          const requested = await requestPermissionSafely(
-            () => requestPermissionsFn(),
-            () => getPermissionsFn(),
-          );
-          isGranted =
-            requested.status === PERMISSION_GRANTED ||
-            Boolean((requested as any).granted);
+          const requested: CalendarPermissionResponse =
+            await requestPermissionSafely(
+              () => Calendar.requestCalendarPermissionsAsync(),
+              () => Calendar.getCalendarPermissionsAsync(),
+            );
+          isGranted = isCalendarPermissionGranted(requested);
           canAskAgain = requested.canAskAgain;
 
           if (!isGranted && Platform.OS === "android") {
@@ -205,34 +214,32 @@ export function useDeviceCalendar() {
 
         if (!isGranted) {
           if (!silent) {
-            if (canAskAgain === false) {
-              const iosHint =
-                Platform.OS === "ios"
-                  ? " En iOS, asegúrate de haber concedido 'Acceso completo' en los Ajustes."
-                  : "";
-              Alert.alert(
-                "Permiso de calendario desactivado",
-                `Debes habilitar el acceso al calendario desde los Ajustes del dispositivo para sincronizar tus recordatorios.${iosHint}`,
-                [
-                  { text: "Cancelar", style: "cancel" },
-                  { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
-                ],
-              );
-            } else {
-              Alert.alert(
-                "Permiso denegado",
+            const iosHint =
+              Platform.OS === "ios"
+                ? " En iOS, asegúrate de haber concedido 'Acceso completo' en los Ajustes."
+                : "";
+            showPermissionAlert(canAskAgain, {
+              blockedTitle: "Permiso de calendario desactivado",
+              blockedMessage: `Debes habilitar el acceso al calendario desde los Ajustes del dispositivo para sincronizar tus recordatorios.${iosHint}`,
+              deniedTitle: "Permiso denegado",
+              deniedMessage:
                 "No se puede sincronizar con el calendario sin conceder el permiso correspondiente.",
-              );
-            }
+            });
           }
           return false;
         }
 
         return true;
       } catch (error) {
-        console.warn("[useDeviceCalendar] Error al verificar permisos de calendario:", error);
+        console.warn(
+          "[useDeviceCalendar] Error al verificar permisos de calendario:",
+          error,
+        );
         if (!silent) {
-          Alert.alert("Error", "Ocurrió un error al verificar los permisos del calendario.");
+          Alert.alert(
+            "Error",
+            "Ocurrió un error al verificar los permisos del calendario.",
+          );
         }
         return false;
       }
@@ -250,11 +257,13 @@ export function useDeviceCalendar() {
           }
         }
       } catch (e) {
-        console.warn("[useDeviceCalendar] Error al obtener calendario por defecto en iOS:", e);
+        console.warn(
+          "[useDeviceCalendar] Error al obtener calendario por defecto en iOS:",
+          e,
+        );
       }
     }
 
-    // Android o fallback en iOS si no hubo default
     const calendars = await Calendar.getCalendarsAsync(
       Calendar.EntityTypes ? Calendar.EntityTypes.EVENT : undefined,
     );
@@ -304,7 +313,10 @@ export function useDeviceCalendar() {
           timeZone,
         };
 
-        if (input.leadTimeSeconds !== undefined && input.leadTimeSeconds !== null) {
+        if (
+          input.leadTimeSeconds !== undefined &&
+          input.leadTimeSeconds !== null
+        ) {
           eventData.alarms = [
             {
               relativeOffset: -Math.round(input.leadTimeSeconds / 60),
@@ -315,7 +327,10 @@ export function useDeviceCalendar() {
         const eventId = await Calendar.createEventAsync(calendarId, eventData);
         return eventId;
       } catch (error) {
-        console.warn("[useDeviceCalendar] Error al crear evento en calendario:", error);
+        console.warn(
+          "[useDeviceCalendar] Error al crear evento en calendario:",
+          error,
+        );
         Alert.alert(
           "Error",
           "No se pudo sincronizar el evento en el calendario del dispositivo.",
@@ -356,13 +371,19 @@ export function useDeviceCalendar() {
         if (
           input.startDate !== undefined ||
           input.targetTimestamp !== undefined ||
-          (input.date !== undefined && input.time !== undefined)
+          (input.isoDate !== undefined && input.time !== undefined)
         ) {
           const startDate = resolveStartDate(input as CalendarEventInput);
           updateData.startDate = startDate;
-          updateData.endDate = resolveEndDate(input as CalendarEventInput, startDate);
+          updateData.endDate = resolveEndDate(
+            input as CalendarEventInput,
+            startDate,
+          );
         } else if (input.endDate !== undefined) {
-          updateData.endDate = resolveEndDate(input as CalendarEventInput, new Date());
+          updateData.endDate = resolveEndDate(
+            input as CalendarEventInput,
+            new Date(),
+          );
         }
 
         if (input.leadTimeSeconds !== undefined) {
@@ -380,7 +401,10 @@ export function useDeviceCalendar() {
         await Calendar.updateEventAsync(eventId, updateData);
         return true;
       } catch (error) {
-        console.warn("[useDeviceCalendar] Error al actualizar evento en calendario:", error);
+        console.warn(
+          "[useDeviceCalendar] Error al actualizar evento en calendario:",
+          error,
+        );
         Alert.alert(
           "Error",
           "No se pudo actualizar el evento en el calendario del dispositivo.",
@@ -402,7 +426,9 @@ export function useDeviceCalendar() {
       setLoading(true);
       try {
         const isSilent = options?.silent !== undefined ? options.silent : true;
-        const hasPermission = await solicitarPermisoCalendario({ silent: isSilent });
+        const hasPermission = await solicitarPermisoCalendario({
+          silent: isSilent,
+        });
         if (!hasPermission) {
           return false;
         }
@@ -410,7 +436,10 @@ export function useDeviceCalendar() {
         await Calendar.deleteEventAsync(eventId);
         return true;
       } catch (error) {
-        console.warn("[useDeviceCalendar] Error al eliminar evento de calendario:", error);
+        console.warn(
+          "[useDeviceCalendar] Error al eliminar evento de calendario:",
+          error,
+        );
         return false;
       } finally {
         setLoading(false);

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Alert, Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 
 // Nota de Arquitectura: Se importan submódulos específicos de expo-notifications/build/
 // para evitar que Expo Go (SDK 53+) cargue el módulo de Remote Push Notifications
@@ -22,9 +22,12 @@ import { setNotificationCategoryAsync } from "expo-notifications/build/setNotifi
 import { setBadgeCountAsync } from "expo-notifications/build/setBadgeCountAsync";
 import { dismissNotificationAsync } from "expo-notifications/build/dismissNotificationAsync";
 
-import { requestPermissionSafely } from "../utils/permissionHelpers";
+import {
+  requestPermissionSafely,
+  showPermissionAlert,
+} from "../utils/permissionHelpers";
 import { CategoryType, Reminder } from "../types";
-import { CATEGORIAS } from "../constants/categories";
+import { useAuthStore } from "../store/useAuthStore";
 import { useReminderStore } from "../store/useReminderStore";
 import { getStoredReminders } from "../services/reminderStorage";
 
@@ -46,6 +49,18 @@ export interface ScheduleNotificationOptions {
   targetDate?: string;
   targetTime?: string;
   leadTimeSeconds?: number | null;
+}
+
+export interface NotificationResponsePayload {
+  actionIdentifier?: string;
+  notification?: {
+    request?: {
+      identifier?: string;
+      content?: {
+        data?: Record<string, unknown>;
+      };
+    };
+  };
 }
 
 export function formatearTituloNotificacion(
@@ -83,7 +98,7 @@ export async function registrarCategoriaNotificaciones(): Promise<void> {
         },
       },
     ]);
-  } catch (error) {
+  } catch {
     // Entorno sin soporte de categorías o en testing
   }
 }
@@ -91,7 +106,7 @@ export async function registrarCategoriaNotificaciones(): Promise<void> {
 export async function actualizarBadgeCount(count: number): Promise<boolean> {
   try {
     return await setBadgeCountAsync(Math.max(0, count));
-  } catch (err) {
+  } catch {
     return false;
   }
 }
@@ -101,14 +116,15 @@ export async function sincronizarBadgePendientes(
 ): Promise<number> {
   try {
     const store = useReminderStore.getState();
+    const targetUser = username ?? useAuthStore.getState().user ?? undefined;
     let list = store.reminders;
     if (!list || list.length === 0) {
-      list = await getStoredReminders(username);
+      list = await getStoredReminders(targetUser);
     }
     const pendientes = list.filter((r) => !r.completed).length;
     await setBadgeCountAsync(pendientes);
     return pendientes;
-  } catch (error) {
+  } catch {
     return 0;
   }
 }
@@ -120,7 +136,8 @@ export async function marcarRecordatorioCompletadoPorNotificacion(
   try {
     const store = useReminderStore.getState();
     let target = store.reminders.find((r) => r.id === reminderId);
-    const targetUser = username ?? target?.username;
+    const targetUser =
+      username ?? target?.username ?? useAuthStore.getState().user ?? undefined;
 
     if (!target) {
       const stored = await getStoredReminders(targetUser);
@@ -146,29 +163,25 @@ export async function marcarRecordatorioCompletadoPorNotificacion(
   }
 }
 
-export async function handleNotificationResponse(response: {
-  actionIdentifier?: string;
-  notification?: {
-    request?: {
-      identifier?: string;
-      content?: {
-        data?: Record<string, any>;
-      };
-    };
-  };
-}): Promise<void> {
+export async function handleNotificationResponse(
+  response: NotificationResponsePayload,
+): Promise<void> {
   try {
     const actionIdentifier = response?.actionIdentifier;
     const notification = response?.notification;
     if (actionIdentifier === ACTION_COMPLETE_REMINDER) {
-      const reminderId = notification?.request?.content?.data?.reminderId;
-      const username = notification?.request?.content?.data?.username;
+      const data = notification?.request?.content?.data;
+      const reminderId =
+        typeof data?.reminderId === "string" ? data.reminderId : undefined;
+      const username =
+        typeof data?.username === "string" ? data.username : undefined;
+
       if (reminderId) {
         await marcarRecordatorioCompletadoPorNotificacion(reminderId, username);
       }
       if (notification?.request?.identifier) {
         await dismissNotificationAsync(notification.request.identifier).catch(
-          () => { },
+          () => {},
         );
       }
     }
@@ -177,35 +190,51 @@ export async function handleNotificationResponse(response: {
   }
 }
 
-// Inicializador único a nivel de módulo del handler, listeners y categorías
-try {
-  setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
+/**
+ * Configura el handler y listeners de notificaciones dentro del ciclo de vida de la app.
+ * Retorna una función cleanup para remover las suscripciones al desmontar.
+ */
+export function setupNotificationListeners(): () => void {
+  const subscriptions: { remove?: () => void }[] = [];
 
-  addNotificationReceivedListener((notification) => {
-    console.log(
-      "Notificación recibida:",
-      notification.request.content.title,
-    );
-  });
+  try {
+    setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
 
-  addNotificationResponseReceivedListener(handleNotificationResponse as any);
-  registrarCategoriaNotificaciones();
-} catch (e) {
-  // Ignorar en pruebas o entornos no nativos
+    const receivedSub = addNotificationReceivedListener((notification) => {
+      console.log(
+        "Notificación recibida:",
+        notification.request.content.title,
+      );
+    });
+    if (receivedSub) subscriptions.push(receivedSub);
+
+    const responseSub = addNotificationResponseReceivedListener((response) => {
+      void handleNotificationResponse(response);
+    });
+    if (responseSub) subscriptions.push(responseSub);
+
+    void registrarCategoriaNotificaciones();
+  } catch {
+    // Ignorar en entornos sin soporte nativo de notificaciones
+  }
+
+  return () => {
+    subscriptions.forEach((sub) => sub.remove?.());
+  };
 }
 
-type PermissionStatus = "idle" | "granted" | "denied" | "loading";
+type LocalPermissionStatus = "idle" | "granted" | "denied" | "loading";
 
 export function useLocalNotifications() {
   const [permissionStatus, setPermissionStatus] =
-    useState<PermissionStatus>("idle");
+    useState<LocalPermissionStatus>("idle");
   const isRequestingRef = useRef(false);
 
   const requestPermission = useCallback(
@@ -222,7 +251,7 @@ export function useLocalNotifications() {
             vibrationPattern: [0, 250, 250, 250],
             lightColor: "#2563EB",
           });
-        } catch (err) {
+        } catch {
           // Canal Android no disponible en entorno web/emulador sin soporte
         }
       }
@@ -250,15 +279,12 @@ export function useLocalNotifications() {
         const granted = finalStatus === "granted";
         setPermissionStatus(granted ? "granted" : "denied");
 
-        if (!granted && showAlertOnDenied && !canAskAgain) {
-          Alert.alert(
-            "Permisos de notificación desactivados",
-            "Debes habilitar las notificaciones desde los Ajustes del dispositivo para recibir recordatorios.",
-            [
-              { text: "Cancelar", style: "cancel" },
-              { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
-            ],
-          );
+        if (!granted && showAlertOnDenied) {
+          showPermissionAlert(canAskAgain, {
+            blockedTitle: "Permisos de notificación desactivados",
+            blockedMessage:
+              "Debes habilitar las notificaciones desde los Ajustes del dispositivo para recibir recordatorios.",
+          });
         }
 
         return granted;
@@ -291,10 +317,10 @@ export function useLocalNotifications() {
         const formattedBody =
           options?.targetDate || options?.targetTime
             ? formatearCuerpoNotificacion(
-              descripcion,
-              options?.targetDate,
-              options?.targetTime,
-            )
+                descripcion,
+                options?.targetDate,
+                options?.targetTime,
+              )
             : descripcion || "Tienes una tarea programada.";
 
         const id = await scheduleNotificationAsync({

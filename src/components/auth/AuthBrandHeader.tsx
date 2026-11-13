@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../constants/theme";
+import { COLORS } from "../../constants/theme";
 
 export default function AuthBrandHeader() {
   return (
@@ -72,3 +72,4 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 });
+

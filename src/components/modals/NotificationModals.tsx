@@ -12,8 +12,8 @@ import {
   NOTIFICATION_PRESETS,
   TimeUnit,
   calculateCustomLeadTime,
-} from "../utils/dateHelpers";
-import { COLORS, RADIUS } from "../constants/theme";
+} from "../../utils/dateHelpers";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 interface Props {
   showPresetModal: boolean;
@@ -261,3 +261,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+

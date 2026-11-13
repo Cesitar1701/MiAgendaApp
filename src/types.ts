@@ -18,9 +18,9 @@ export interface Reminder {
   title: string;
   description: string;
   date: string;
-  isoDate?: string;
+  isoDate: string;
   time: string;
-  targetTimestamp?: number;
+  targetTimestamp: number;
   leadTimeSeconds?: number | null;
   category: CategoryType;
   completed: boolean;
@@ -34,6 +34,6 @@ export interface Reminder {
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Home: { username: string };
-  Create: { username?: string; reminder?: Reminder } | undefined;
+  Home: undefined;
+  Create: { reminder?: Reminder } | undefined;
 };
